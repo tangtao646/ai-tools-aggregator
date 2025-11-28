@@ -7,18 +7,25 @@ from alembic import context
 
 import sys
 import os
-# 将项目根目录添加到路径，以便导入您的应用模块
-sys.path.append(os.path.join(os.getcwd()))
+# --- 1. 修正路径，将 backend 目录 (即 /app) 加入 Python 搜索路径 ---
+current_dir = os.path.dirname(os.path.abspath(__file__))
+backend_root = os.path.join(current_dir, '..') # /backend
+sys.path.append(backend_root)
 
-# 2. 导入 Base 和您的模型
-# 假设 Base 对象在 backend/app/core/db.py 中，且名为 Base
-from app.core.db import Base 
-target_metadata = Base.metadata
+# --- 2. 导入 SQLModel 和 db.py 模块 ---
+from sqlmodel import SQLModel 
+# 我们只需要导入 engine，但 SQLModel 会在下面获取元数据
+from app.core.db import engine 
 
-# 导入所有模型，确保 Alembic 能够发现它们
-# 否则 Alembic 无法知道要创建哪些表
-# 导入 models 目录下所有的 Python 文件 (除了 __init__ 和 schemas)
+# --- 3. 导入所有模型文件（让 SQLModel.metadata 知道所有表的定义） ---
+# 确保导入了所有包含继承自 SQLModel 的类的文件
 from app.models import admin, category_mapping, tool, user, workflow_template
+
+# ----------------------------------------------------
+# 4. 设置正确的 target_metadata (使用 SQLModel.metadata)
+# ----------------------------------------------------
+target_metadata = SQLModel.metadata # ✅ 正确设置
+
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -78,7 +85,7 @@ def run_migrations_online() -> None:
     DATABASE_URL = os.environ.get("DATABASE_URL")
     if not DATABASE_URL:
         # 本地开发 URL - 确保与您本地环境匹配
-        DATABASE_URL = "postgresql+psycopg2://user:password@localhost/localdb"
+        DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:5432/aitools"
 
     connectable = create_engine(DATABASE_URL)
 
