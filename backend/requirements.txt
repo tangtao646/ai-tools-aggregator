@@ -11,6 +11,8 @@ python-multipart
 # Database
 sqlmodel # ORM 和数据模型
 psycopg2-binary # PostgreSQL 驱动
+# 迁移工具
+alembic
 
 # Authentication
 google-auth
