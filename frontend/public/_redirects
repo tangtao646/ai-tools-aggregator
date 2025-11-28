@@ -1,0 +1,3 @@
+# _redirects
+# 规则：当 Pages 收到 /api/ 开头的请求时，将其内部转发到 Railway 后端。
+/api/* https://api.aicollection.tools/api/:splat 200

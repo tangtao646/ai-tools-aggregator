@@ -24,12 +24,12 @@ const Footer = () => {
                             Privacy Policy
                         </a>
                         <span className="text-gray-300 dark:text-gray-600">•</span>
-                        <a
+                        {/* <a
                             href="mailto:taoge646@gmail.com"
                             className="text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
                         >
                             Contact Us
-                        </a>
+                        </a> */}
                     </div>
 
                     {/* Copyright */}
