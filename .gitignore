@@ -1,0 +1,79 @@
+# 环境变量文件（包含敏感信息，绝不提交！）
+.env
+.env.local
+.env.production
+.env.development
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# 测试文件
+backend/test_data.py
+backend/test_token.py
+backend/start_postgres.sh
+backend/start_postgres_docker.sh
+backend/setup_postgres.sh
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+aitools.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# 日志
+*.log
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# 构建输出
+build/
+out/
+
+# scripts config with API keys
+/backend/scripts/config.yaml
+# backups and DB
+/backend/*.backup*
+/backend/*.db
+*.db
+*.sqlite
+# large data exports
+/data/*.json
+/backend/scripts/*.json
+# lockfile of frontend (if you use one) - commit if you want deterministic installs
+# node / build
+frontend/node_modules/
+frontend/dist/
+build/
+out/
+# local python env
+.venv/
+.env
+.env.*
+# credentials
+*.pem
+*.key
+secrets.json

@@ -1,0 +1,41 @@
+/* frontend/src/index.css */
+/* 导入 TailwindCSS 基础、组件和工具类 */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* 浅色模式背景 */
+html, body {
+  background-color: #F7F7F9;
+  color: #1A202C;
+}
+
+/* 暗色模式背景 */
+.dark html,
+.dark body {
+  background-color: #121121;
+  color: #E5E7EB;
+}
+
+/* 参考文件中的网格和渐变背景效果 */
+@layer utilities {
+  .dark .bg-grid-pattern {
+    background-image:
+      linear-gradient(rgba(79, 70, 229, 0.1) 1px, transparent 1px),
+      linear-gradient(to right, rgba(79, 70, 229, 0.1) 1px, transparent 1px);
+    background-size: 3rem 3rem;
+  }
+  
+  .dark .bg-radial-gradient {
+    background-image: radial-gradient(circle at top center, rgba(79, 70, 229, 0.15), transparent 40%);
+  }
+}
+

@@ -1,0 +1,30 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined');
+
+:root {
+    --color-primary: #0066CC;
+    --color-background: #F7F7F9;
+    --color-card-bg: #FFFFFF;
+    --color-border: #E2E8F0;
+    --color-text-default: #1A202C;
+}
+
+.dark {
+    --color-primary: #0066CC;
+    --color-background: #121121;
+    --color-card-bg: #1F2937;
+    --color-border: #374151;
+    --color-text-default: #E5E7EB;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    transition: background-color 0.3s, color 0.3s;
+    margin: 0;
+}
+
+.bg-background-light { background-color: var(--color-background); }
+.text-primary { color: var(--color-primary); }
+.bg-primary { background-color: var(--color-primary); }
+.border-primary { border-color: var(--color-primary); }
+.app-container-bg { background-color: var(--color-background); color: var(--color-text-default); }

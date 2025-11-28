@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# 环境变量文件（生产环境通过 Railway 配置）
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# 测试和文档
+tests/
+*.md
+.git/
+.gitignore
+
+# 日志
+*.log
+
+# 迁移文件
+migrations/versions/*.pyc

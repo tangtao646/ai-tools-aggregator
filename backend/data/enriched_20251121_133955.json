@@ -1,0 +1,195 @@
+[
+  {
+    "name": "ChatGPT",
+    "description": "ChatGPT is an AI-powered conversational agent developed by OpenAI that can engage in natural language conversations, answer questions, write content, code, and assist with a wide variety of tasks through an intuitive chat interface.",
+    "short_description": "AI chatbot that understands and generates human-like text",
+    "official_link": "https://chat.openai.com",
+    "category": "AI Chatbot",
+    "pricing_model": "Freemium",
+    "tags": [
+      "conversational-ai",
+      "nlp",
+      "writing-assistant",
+      "coding-helper"
+    ],
+    "features": [
+      "Natural language understanding and generation",
+      "Multi-turn conversations with context retention",
+      "Code writing and debugging assistance",
+      "Content creation and editing",
+      "Language translation",
+      "Question answering across multiple domains"
+    ],
+    "use_cases": [
+      "Customer service automation",
+      "Content writing and brainstorming",
+      "Programming assistance",
+      "Learning and education",
+      "Research and information gathering"
+    ],
+    "pricing_details": "Free tier with GPT-3.5, ChatGPT Plus ($20/month) includes GPT-4 access and faster response times",
+    "is_featured": true,
+    "meta_title": "ChatGPT: 您的智能AI对话伙伴 - 轻松写作、编程与答疑",
+    "meta_description": "探索 ChatGPT，OpenAI 强大的 AI 对话机器人。它能进行自然语言交流，回答问题，创作内容，编写代码，并通过直观的聊天界面协助您完成各种任务。立即体验智能助手！",
+    "pros": [
+      "强大的自然语言理解与生成能力",
+      "多功能性：写作、编程、答疑、创意生成等",
+      "直观易用的聊天交互界面，操作简单",
+      "覆盖广泛的知识领域与任务类型"
+    ],
+    "cons": [
+      "信息准确性有时需验证，可能出现“幻觉”",
+      "知识截止日期限制，无法获取实时最新信息",
+      "有时可能产生偏见或不当内容"
+    ],
+    "faqs": [
+      {
+        "question": "ChatGPT 是免费的吗？",
+        "answer": "ChatGPT 提供免费版本供用户使用。您也可以订阅 ChatGPT Plus 享受更快的响应速度和优先访问新功能。"
+      },
+      {
+        "question": "我可以用 ChatGPT 做什么？",
+        "answer": "ChatGPT 功能多样，可用于内容创作、编程辅助、学习答疑、信息总结、头脑风暴、语言翻译等各种任务。"
+      },
+      {
+        "question": "ChatGPT 是否总能提供准确的信息？",
+        "answer": "ChatGPT 旨在提供有用和准确的信息，但作为一个 AI 模型，它有时可能会生成不准确或过时的内容。建议对关键信息进行核实。"
+      },
+      {
+        "question": "ChatGPT 的知识截止日期是什么时候？",
+        "answer": "ChatGPT 的知识基于训练数据，通常有一个知识截止日期。因此，它可能无法提供关于最新事件或实时信息的细节。"
+      }
+    ]
+  },
+  {
+    "name": "Midjourney",
+    "description": "Midjourney is an AI art generator that creates stunning, high-quality images from text prompts using advanced machine learning algorithms. It transforms your creative ideas and descriptions into beautiful visual artwork with various artistic styles.",
+    "short_description": "AI-powered image generator that creates art from text descriptions",
+    "official_link": "https://www.midjourney.com",
+    "category": "AI Image Generator",
+    "pricing_model": "Subscription",
+    "tags": [
+      "image-generation",
+      "ai-art",
+      "creative-tools",
+      "design"
+    ],
+    "features": [
+      "Text-to-image generation",
+      "Multiple artistic styles and variations",
+      "High-resolution output",
+      "Iterative refinement with parameters",
+      "Community gallery and inspiration",
+      "Discord-based interface"
+    ],
+    "use_cases": [
+      "Digital art creation",
+      "Concept art and ideation",
+      "Marketing materials",
+      "Book covers and illustrations",
+      "Social media content",
+      "Personal creative projects"
+    ],
+    "pricing_details": "Basic plan $10/month (200 images), Standard $30/month (unlimited relaxed mode), Pro $60/month (unlimited fast mode)",
+    "is_featured": true,
+    "meta_title": "Midjourney AI 艺术生成器 | 从文字创建惊艳图像与艺术",
+    "meta_description": "Midjourney 是一款顶级的 AI 艺术生成器，将您的文字描述转化为令人惊叹的高质量视觉艺术作品。利用先进算法，轻松探索多种艺术风格，释放无限创意。",
+    "pros": [
+      "生成令人惊叹的高质量艺术图像",
+      "支持广泛的艺术风格和自定义选项",
+      "通过简单的文字提示即可创作出复杂作品",
+      "拥有活跃的用户社区，提供灵感和支持"
+    ],
+    "cons": [
+      "完全掌握高级提示词技巧需要一定的学习曲线",
+      "免费试用版本功能有限，完整体验需付费订阅",
+      "有时难以精确控制图像的微小细节和特定元素",
+      "生成结果可能受提示词解释影响而具偶然性"
+    ],
+    "faqs": [
+      {
+        "question": "Midjourney 是如何工作的？",
+        "answer": "Midjourney 是一个 AI 艺术生成工具。用户输入文字描述（prompt），AI 模型会根据这些描述，运用先进的算法和机器学习技术，生成对应的视觉艺术作品。"
+      },
+      {
+        "question": "使用 Midjourney 需要付费吗？",
+        "answer": "Midjourney 通常提供有限的免费试用额度。若要持续使用并访问所有功能和更高质量的生成服务，用户需要订阅其付费会员计划。"
+      },
+      {
+        "question": "Midjourney 可以生成哪些类型的图像？",
+        "answer": "Midjourney 能够生成各种风格的图像，包括但不限于写实摄影、插画、概念艺术、抽象艺术、科幻、奇幻等，几乎涵盖所有你能想象到的艺术类型。"
+      },
+      {
+        "question": "我需要专业的艺术背景才能使用 Midjourney 吗？",
+        "answer": "不需要。Midjourney 旨在让所有用户都能轻松创作艺术。即使没有专业的艺术背景，您也可以通过简单的文字提示来生成精美的图像。"
+      },
+      {
+        "question": "Midjourney 生成的图像版权归谁？",
+        "answer": "根据您的订阅计划和使用条款，通常付费用户对其通过 Midjourney 生成的图像拥有商业使用权。具体版权细节建议查阅 Midjourney 的官方网站和用户协议。"
+      }
+    ]
+  },
+  {
+    "name": "Notion AI",
+    "description": "Notion AI is an integrated AI writing assistant built directly into Notion workspaces. It helps users write, brainstorm, edit, summarize, and translate content without leaving their notes and documents.",
+    "short_description": "AI-powered writing assistant integrated into Notion",
+    "official_link": "https://www.notion.so/product/ai",
+    "category": "AI Writing Assistant",
+    "pricing_model": "Add-on",
+    "tags": [
+      "productivity",
+      "writing-assistant",
+      "note-taking",
+      "workspace"
+    ],
+    "features": [
+      "AI-powered writing suggestions",
+      "Content summarization",
+      "Brainstorming and idea generation",
+      "Language translation",
+      "Grammar and style improvements",
+      "Seamless Notion integration"
+    ],
+    "use_cases": [
+      "Meeting notes and summaries",
+      "Content drafting and editing",
+      "Project documentation",
+      "Knowledge base creation",
+      "Team collaboration",
+      "Personal note-taking"
+    ],
+    "pricing_details": "$10/member/month add-on to existing Notion plans",
+    "is_featured": false,
+    "meta_title": "Notion AI：您的智能写作助手 | 提升Notion文档创作与协作效率",
+    "meta_description": "Notion AI 是 Notion 工作区内置的集成AI写作助手。它能直接在您的笔记和文档中帮助您撰写、头脑风暴、编辑、总结和翻译内容，告别切换应用的烦恼，大幅提升您的工作效率和内容创作质量。",
+    "pros": [
+      "无缝集成 Notion 工作区，无需切换应用，提升效率。",
+      "一站式处理写作、头脑风暴、编辑、总结与翻译等多种任务。",
+      "基于上下文理解，提供高度相关的生成与优化建议。",
+      "简化内容创作流程，加速草稿生成与信息整理。"
+    ],
+    "cons": [
+      "需 Notion 付费计划支持才能获得完整功能和使用额度。",
+      "AI 生成内容可能需要人工审核以确保准确性、原创性与事实核查。",
+      "对于高度专业化或情感化的内容，AI 辅助仍有局限性。"
+    ],
+    "faqs": [
+      {
+        "question": "Notion AI 是什么？",
+        "answer": "Notion AI 是直接内置于 Notion 工作区内的智能写作助手，旨在帮助用户在不离开笔记和文档的情况下，高效完成内容创作、编辑、总结和翻译等任务。"
+      },
+      {
+        "question": "Notion AI 可以用来做什么？",
+        "answer": "Notion AI 功能强大，可以协助您撰写草稿、头脑风暴想法、润色文本、修正语法和拼写、总结长篇文档、翻译内容以及生成各种格式的文本（如博客文章、会议纪要、邮件等）。"
+      },
+      {
+        "question": "Notion AI 是免费的吗？",
+        "answer": "Notion AI 通常作为 Notion 付费计划的附加功能提供。新用户可能有一定的免费试用额度，但长期使用和完整功能通常需要订阅 Notion 并可能需要支付额外费用。"
+      },
+      {
+        "question": "Notion AI 生成的内容可靠吗？",
+        "answer": "Notion AI 能够提供高质量的文本生成，但作为AI工具，其输出仍可能存在不准确或需要优化的部分。我们强烈建议用户对关键信息进行人工审核、核查和修订，以确保内容的准确性与原创性。"
+      }
+    ]
+  }
+]

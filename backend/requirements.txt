@@ -1,0 +1,37 @@
+# backend/requirements.txt
+
+# FastAPI Framework
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+python-dotenv
+python-multipart
+
+# Database
+sqlmodel # ORM 和数据模型
+psycopg2-binary # PostgreSQL 驱动
+
+# Authentication
+google-auth
+python-jose[cryptography]
+passlib[bcrypt]
+
+# HTTP Client
+requests
+
+# Web Scraping (P2 - Automation)
+playwright>=1.40.0
+lxml>=4.9.0
+selenium>=4.15.0  # 浏览器自动化（处理 JavaScript 渲染）
+webdriver-manager>=4.0.0  # 自动管理浏览器驱动
+
+# LLM Integration (P2 - Automation)
+google-genai>=1.52.0  # Google Gemini API（最新版本，免费额度大）
+
+# Configuration (P2 - Automation)
+pyyaml>=6.0
+requests>=2.31.0
+beautifulsoup4>=4.12.2
+openai>=1.0.0   # optional fallback to OpenAI if you don't use Gemini
+certifi>=2024.6.0
