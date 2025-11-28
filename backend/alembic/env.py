@@ -18,8 +18,7 @@ from sqlmodel import SQLModel
 from app.core.db import engine 
 
 # --- 3. 导入所有模型文件（让 SQLModel.metadata 知道所有表的定义） ---
-# 确保导入了所有包含继承自 SQLModel 的类的文件
-from app.models import admin, category_mapping, tool, user, workflow_template
+import app.models
 
 # ----------------------------------------------------
 # 4. 设置正确的 target_metadata (使用 SQLModel.metadata)
@@ -40,7 +39,6 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-target_metadata = None
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -91,7 +89,8 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection, 
+            target_metadata=target_metadata
         )
 
         with context.begin_transaction():
