@@ -15,7 +15,7 @@ const FilterButton = React.memo(({ category, isActive, onClick }) => {
     const activeClasses = 'bg-primary/10 text-primary font-semibold';
     // 非激活状态：白色背景，深灰/浅灰文本
     const inactiveClasses = 'bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-[#E2E8F0] dark:border-gray-700 font-medium';
-    
+
     return (
         <div
             className={`flex h-9 shrink-0 cursor-pointer items-center justify-center gap-x-2 rounded-full px-4 transition-colors ${isActive ? activeClasses : inactiveClasses}`}
@@ -31,7 +31,7 @@ const FilterButton = React.memo(({ category, isActive, onClick }) => {
 
 const Home = ({ onNavigateToDetail }) => {
     const { t } = useI18n();
-    
+
     // 状态管理
     const [tools, setTools] = useState([]); // 从后端获取的工具列表
     const [loading, setLoading] = useState(true); // 加载状态
@@ -50,10 +50,10 @@ const Home = ({ onNavigateToDetail }) => {
     const offsetRef = useRef(0);
     const hasMoreRef = useRef(true);
     const sentinelRef = useRef(null);
-    
+
     // 计算总页数（仅用于显示或逻辑判断，如果需要）
     const totalPages = Math.ceil(totalItems / pageSize);
-    
+
     // Fetch first page or when filters/search change: reset list and offset
     useEffect(() => {
         // Fetch dynamic display categories for the filter bar (only once on mount)
@@ -117,7 +117,7 @@ const Home = ({ onNavigateToDetail }) => {
 
         resetAndLoad();
     }, [activeCategory, searchTerm, pricingModel, rating]);
-    
+
     const handleSearchChange = (e) => {
         setInputValue(e.target.value);
     };
@@ -129,7 +129,7 @@ const Home = ({ onNavigateToDetail }) => {
     const applySearch = useCallback(() => {
         // 1. 设置搜索词，触发 useEffect 重新加载
         setSearchTerm(inputValue);
-        
+
         // 2. 重置所有筛选器为默认值 (保留逻辑)
         if (activeCategory !== 'all') {
             setActiveCategory('all');
@@ -165,10 +165,10 @@ const Home = ({ onNavigateToDetail }) => {
     // 修正点：点击筛选按钮时，同时清空搜索输入框 (inputValue)
     const handleFilterClick = useCallback((category) => {
         setActiveCategory(category.toLowerCase()); // 确保存储为小写，与'all'一致
-        setSearchTerm(''); 
+        setSearchTerm('');
         setInputValue(''); // 新增：清空输入框显示内容
     }, []);
-    
+
     // 新增：处理 Pricing Model 变更，并清空搜索
     const handlePricingChange = (e) => {
         const value = e.target.value;
@@ -256,6 +256,11 @@ const Home = ({ onNavigateToDetail }) => {
         const sentinel = sentinelRef.current;
         if (!sentinel) return;
 
+        // 检查是否有更多数据，如果没有，则不初始化 Observer
+        if (!hasMoreRef.current) {
+            return;
+        }
+
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
@@ -273,10 +278,10 @@ const Home = ({ onNavigateToDetail }) => {
         return () => {
             observer.disconnect();
         };
-    }, [loadMore]);
+    }, [loadMore,loading, loadingMore]);
     return (
         <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 md:py-12">
-            
+
             {/* 1. Search Bar - 保持原布局，但移除 Shadow-sm 以匹配设计图的轻量感 */}
             <div className="mb-8 flex justify-center">
                 <label className="flex flex-col min-w-40 h-14 w-full max-w-[50%]">
@@ -311,12 +316,12 @@ const Home = ({ onNavigateToDetail }) => {
             {/* 2. Filters - 保持与设计图一致的紧凑布局和 Clear Search 位置 */}
             <div className="flex flex-wrap items-center gap-3 mb-10">
                 {/* All Tools Button */}
-                <FilterButton 
+                <FilterButton
                     category={t('categories.all')}
                     isActive={activeCategory === 'all'}
                     onClick={() => handleFilterClick('all')}
                 />
-                
+
                 {/* Dynamic Category Buttons */}
                 {catsLoading ? (
                     <div className="flex items-center px-2">
@@ -390,9 +395,9 @@ const Home = ({ onNavigateToDetail }) => {
                 // 工具卡片网格 - 响应式：lg及以上5列，md 3列，sm 2列
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 lg:gap-5">
                     {uniqueDisplayTools.map((tool, idx) => (
-                        <ToolCard 
-                            key={tool.slug || tool.id || idx} 
-                            tool={tool} 
+                        <ToolCard
+                            key={tool.slug || tool.id || idx}
+                            tool={tool}
                             onNavigateToDetail={onNavigateToDetail}
                         />
                     ))}
