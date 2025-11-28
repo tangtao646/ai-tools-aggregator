@@ -50,6 +50,7 @@ const Home = ({ onNavigateToDetail }) => {
     const offsetRef = useRef(0);
     const hasMoreRef = useRef(true);
     const sentinelRef = useRef(null);
+    const initialLoadDoneRef = useRef(false); // <--- 新增：用于标记第一次数据是否加载完成
 
     // 计算总页数（仅用于显示或逻辑判断，如果需要）
     const totalPages = Math.ceil(totalItems / pageSize);
@@ -107,6 +108,7 @@ const Home = ({ onNavigateToDetail }) => {
                 if (items.length < pageSize || offsetRef.current >= (response.data.total || 0)) {
                     hasMoreRef.current = false;
                 }
+                initialLoadDoneRef.current = true; // <--- 关键：标记初始数据已加载
             } catch (err) {
                 console.error('获取工具列表失败:', err);
                 setError(t('home.loadError') || 'Failed to load data');
@@ -254,6 +256,9 @@ const Home = ({ onNavigateToDetail }) => {
     // IntersectionObserver 用于实现滚动到底部自动加载更多
     useEffect(() => {
         const sentinel = sentinelRef.current;
+        // 🚨 检查 1：如果初始数据未加载，不启动 Observer
+        if (!initialLoadDoneRef.current) return;
+
         if (!sentinel) return;
 
         // 检查是否有更多数据，如果没有，则不初始化 Observer
@@ -263,7 +268,8 @@ const Home = ({ onNavigateToDetail }) => {
 
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
-                if (entry.isIntersecting) {
+                // 确保在可见、有更多数据、且当前未加载时才调用
+                if (entry.isIntersecting && hasMoreRef.current && !loading && !loadingMore) { 
                     loadMore();
                 }
             });
@@ -278,7 +284,7 @@ const Home = ({ onNavigateToDetail }) => {
         return () => {
             observer.disconnect();
         };
-    }, [loadMore,loading, loadingMore]);
+    }, [loadMore,loading, loadingMore,initialLoadDoneRef.current]);
     return (
         <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 md:py-12">
 
