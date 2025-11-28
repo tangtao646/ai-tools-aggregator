@@ -2,6 +2,8 @@
 
 # FastAPI Framework
 fastapi
+# 必需的 WSGI HTTP 服务器
+gunicorn
 uvicorn[standard]
 pydantic
 pydantic-settings
@@ -37,3 +39,4 @@ requests>=2.31.0
 beautifulsoup4>=4.12.2
 openai>=1.0.0   # optional fallback to OpenAI if you don't use Gemini
 certifi>=2024.6.0
+
