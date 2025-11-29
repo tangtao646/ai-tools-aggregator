@@ -24,9 +24,11 @@ def get_sitemap(db: Session = Depends(get_session)):
     xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
     xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
     
+    mydomain = "https://aicollection.tools"
+    
     # 首页
     xml_content += '  <url>\n'
-    xml_content += '    <loc>https://yourdomain.com/</loc>\n'
+    xml_content += f'    <loc>{mydomain}/</loc>\n'
     xml_content += f'    <lastmod>{datetime.utcnow().strftime("%Y-%m-%d")}</lastmod>\n'
     xml_content += '    <changefreq>daily</changefreq>\n'
     xml_content += '    <priority>1.0</priority>\n'
@@ -35,7 +37,7 @@ def get_sitemap(db: Session = Depends(get_session)):
     # 每个工具页面
     for tool in tools:
         xml_content += '  <url>\n'
-        xml_content += f'    <loc>https://yourdomain.com/tool/{tool.slug}</loc>\n'
+        xml_content += f'    <loc>{mydomain}/tool/{tool.slug}</loc>\n'
         xml_content += f'    <lastmod>{tool.updated_at.strftime("%Y-%m-%d")}</lastmod>\n'
         xml_content += '    <changefreq>weekly</changefreq>\n'
         xml_content += '    <priority>0.8</priority>\n'
@@ -63,7 +65,7 @@ Disallow: /api/
 Disallow: /my-submissions
 
 # Sitemap
-Sitemap: https://yourdomain.com/api/v1/seo/sitemap.xml
+Sitemap: https://aicollection.tools/api/v1/seo/sitemap.xml
 
 # Crawl-delay (optional, in seconds)
 Crawl-delay: 1
