@@ -31,7 +31,7 @@ import os
 # 从环境变量读取允许的域名，支持多个域名用逗号分隔
 cors_origins_env = os.getenv("CORS_ORIGINS", "")
 origins = [
-    "http://localhost",
+    "https://aicollection.tools", # 您的前端生产域名
     "http://localhost:5173",  # Vite 前端开发服务器
     "http://127.0.0.1:5173",
 ]

@@ -23,6 +23,7 @@ passlib[bcrypt]
 
 # HTTP Client
 requests
+python-multipart
 
 # Web Scraping (P2 - Automation)
 playwright>=1.40.0
