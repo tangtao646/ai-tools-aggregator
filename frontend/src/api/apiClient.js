@@ -4,7 +4,7 @@ import axios from 'axios';
 // 后端 API 的基础 URL
 // 开发环境: http://localhost:8000/api/v1
 // 生产环境: 从环境变量读取（Railway 后端地址）
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'; 
+const BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api/v1` || 'http://localhost:8000/api/v1'; 
 
 const apiClient = axios.create({
   baseURL: BASE_URL,
