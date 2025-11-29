@@ -758,13 +758,15 @@ def main():
 
     # 检查API密钥
     api_key = os.getenv("GOOGLE_API_KEY")
+    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
     if not api_key:
         print("⚠️  GOOGLE_API_KEY not found - will use fallback generation")
         print("💡 Set API key for better content: export GOOGLE_API_KEY='your-key'")
         print()
 
     # 创建生成器
-    generator = AIToolsSEOGenerator(api_key=api_key)
+    generator = AIToolsSEOGenerator(api_key=api_key, model=model)
 
     try:
         # 加载基础数据

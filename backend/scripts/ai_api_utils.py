@@ -186,29 +186,43 @@ def call_openai_chat(prompt: str, model: str, api_key: str, timeout: int = 60) -
 
 
 def call_model(prompt: str) -> str:
-    # 配置文件和环境变量加载逻辑
-    config_path = os.path.join(os.path.dirname(__file__), "config.yaml")
-    gemini_key = None
-    gemini_model = None
-    openai_key = None
-    openai_model = None
-    
-    if os.path.exists(config_path):
-        try:
-            with open(config_path, "r", encoding="utf-8") as cf:
-                cfg = yaml.safe_load(cf)
-                gemini_cfg = cfg.get("gemini") if isinstance(cfg, dict) else None
-                if gemini_cfg:
-                    gemini_key = gemini_cfg.get("api_key") or gemini_cfg.get("api_key")
-                    gemini_model = gemini_cfg.get("model")
-        except Exception:
-            pass
-
-    gemini_key = os.environ.get("GEMINI_API_KEY") or gemini_key
-    gemini_model = os.environ.get("GEMINI_MODEL") or gemini_model or "gemini-2.5-flash"
+    # -----------------------------------------------------------------
+    # 1. 优先从环境变量加载 (适用于云端 Railway)
+    # -----------------------------------------------------------------
+    gemini_key = os.environ.get("GEMINI_API_KEY")
+    gemini_model = os.environ.get("GEMINI_MODEL")
     openai_key = os.environ.get("OPENAI_API_KEY")
-    openai_model = os.environ.get("OPENAI_MODEL") or "gpt-4o-mini"
+    openai_model = os.environ.get("OPENAI_MODEL")
+
+    # 设置默认模型 (如果环境变量或配置文件都没有设置)
+    gemini_model = gemini_model or "gemini-2.5-flash"
+    openai_model = openai_model or "gpt-4o-mini"
     
+    # -----------------------------------------------------------------
+    # 2. 如果 GEMINI 密钥未通过环境变量设置，尝试从 config.yaml 加载 (本地备用)
+    # -----------------------------------------------------------------
+    if not gemini_key:
+        config_path = os.path.join(os.path.dirname(__file__), "config.yaml")
+        
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, "r", encoding="utf-8") as cf:
+                    cfg = yaml.safe_load(cf)
+                    gemini_cfg = cfg.get("gemini") if isinstance(cfg, dict) else None
+                    
+                    if gemini_cfg:
+                        # 仅加载密钥和模型，覆盖本地默认值
+                        gemini_key = gemini_cfg.get("api_key")
+                        # 仅在环境变量和默认模型都未设置时，使用配置文件中的模型
+                        gemini_model = gemini_model or gemini_cfg.get("model") 
+            except Exception as e:
+                # 在云端，如果文件不存在或读取失败，打印警告并继续
+                print(f"Warning: Could not load config.yaml: {e}") 
+                pass # 忽略读取错误，继续检查下一个选项
+
+    # -----------------------------------------------------------------
+    # 3. 执行模型调用逻辑
+    # -----------------------------------------------------------------
     if gemini_key:
         print(f"-> Calling Gemini model: {gemini_model}")
         return call_gemini(prompt, gemini_model, gemini_key)
@@ -216,4 +230,5 @@ def call_model(prompt: str) -> str:
         print(f"-> Calling OpenAI model: {openai_model}")
         return call_openai_chat(prompt, openai_model, openai_key)
     else:
-        raise RuntimeError("No API key found. Set GEMINI_API_KEY or OPENAI_API_KEY in environment or configure `config.yaml`.")
+        # 抛出明确的错误信息，指导用户检查环境变量
+        raise RuntimeError("No API key found. Please ensure GEMINI_API_KEY or OPENAI_API_KEY is set in environment variables.")
