@@ -1,0 +1,80 @@
+# Docker Compose 文件，定义数据库和后端服务 (已修复重复定义问题)
+version: '3.8'
+
+services:
+  # ----------------------------------------------------
+  # 1. 数据库服务 (PostgreSQL) - 定义唯一且完整
+  # ----------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: aitools-postgres
+    # 始终重启，除非主动停止
+    restart: unless-stopped 
+    environment:
+      # 从 .env 文件中读取 POSTGRES 服务配置
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      # 端口映射：外部:内部
+      - "5432:5432" 
+    volumes:
+      # 挂载命名数据卷，用于持久化数据库数据
+      - postgres_data:/var/lib/postgresql/data
+      
+    # 增加 Healthcheck：确保容器内的数据库服务真正启动并准备好接受连接
+    healthcheck:
+      # 测试命令：检查数据库是否准备就绪
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s # 每隔 5 秒检查一次
+      timeout: 5s  # 每次检查超时时间 5 秒
+      retries: 5   # 重试 5 次才认为失败
+
+  # ----------------------------------------------------
+  # 2. 后端应用服务 (FastAPI/Python App)
+  # ----------------------------------------------------
+  backend:
+    build:
+      context: ./go_service
+      dockerfile: Dockerfile 
+    container_name: aitools-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    
+    # 关键改进点：使用变量构建 DATABASE_URL 确保与数据库服务配置一致
+    environment:
+      # 确保容器可以访问这些配置，以便于应用启动
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+       # 完整的数据库连接 URL。主机名必须是 'postgres' (服务名)
+      # Construct DATABASE_URL to point to the compose postgres service hostname
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
+      GEMINI_API_KEY: ${GEMINI_API_KEY} 
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+     
+     # HTTP_PROXY: ${http_proxy}
+     # HTTPS_PROXY: ${https_proxy}
+     # ALL_PROXY: ${all_proxy}
+
+      
+    volumes:
+      # 将本地 ./backend 目录挂载到容器内部的 /go_service/cmd/server
+      - ./go_service:/app
+    
+    depends_on:
+      postgres:
+        # 确保等待数据库服务完全健康后再启动 backend
+        condition: service_healthy 
+
+# ----------------------------------------------------
+# 3. 数据卷定义
+# ----------------------------------------------------
+volumes:
+  postgres_data:
+    # 命名卷，确保数据持久性。

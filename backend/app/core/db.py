@@ -1,11 +1,16 @@
 # backend/app/core/db.py
 from sqlmodel import create_engine, Session, SQLModel
 from app.core.config import settings
+import logging
+
+# Reduce SQLAlchemy engine logging in non-debug scenarios
+# echo=True 会打印所有执行的 SQL 语句，开发时很有用，但会产生大量日志
+logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
 
 # 数据库引擎
-# echo=True 会打印所有执行的 SQL 语句，开发时很有用
+# Set echo=False to avoid printing SQL statements to stdout
 engine = create_engine(settings.DATABASE_URL,
-    echo=True,
+    echo=False,
     pool_recycle=3600 )
 
 def create_db_and_tables():

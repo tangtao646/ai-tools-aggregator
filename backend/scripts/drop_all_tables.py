@@ -12,6 +12,16 @@ IMPORTANT: This is destructive and irreversible. Make a backup before running.
 
 import os
 import sys
+
+# When running this script directly from the repo root, ensure the `backend`
+# package directory is on `sys.path` so `import app...` works without setting
+# PYTHONPATH in the environment. This is helpful for convenience when running
+# scripts locally (it does not change package layout).
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+BACKEND_DIR = os.path.abspath(os.path.join(CURRENT_DIR, '..'))
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
+
 from app.core.config import settings
 from sqlmodel import SQLModel, create_engine
 import traceback
@@ -71,7 +81,4 @@ if __name__ == "__main__":
     main()
 
 #运行实例
-# To run interactively:
-# python backend/scripts/drop_all_tables.py
-# To run without prompt (use with extreme caution):
-# FORCE_DROP_ALL=true python backend/scripts/drop_all_tables.py
+# source .venv/bin/activate && cd /Users/tangtao/ai-tools-aggregator && FORCE_DROP_ALL=true DATABASE_URL="postgresql://user:db625749TT@127.0.0.1:5432/aitools" PYTHONPATH=backend python backend/scripts/drop_all_tables.py

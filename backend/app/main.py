@@ -1,3 +1,4 @@
+# backend/app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware # 导入 CORS 中间件
 from fastapi.staticfiles import StaticFiles # 导入静态文件服务
@@ -8,7 +9,6 @@ from app.api.endpoints import tools, auth, admin, seo, workflow_templates
 from app.core.config import settings
 from app.models.workflow_template import WorkflowTemplate, WorkflowNode # 新增导入
 from app.models.user import User # 新增导入 User 模型
-from app.models.category_mapping import CategoryMapping  # ensure table is created on startup
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -29,21 +29,11 @@ app = FastAPI(
 import os
 
 # 从环境变量读取允许的域名，支持多个域名用逗号分隔
-cors_origins_env = os.getenv("CORS_ORIGINS", "")
-origins = [
-    "https://aicollection.tools", # 您的前端生产域名
-    "http://localhost:5173",  # Vite 前端开发服务器
-    "http://127.0.0.1:5173",
-]
-
-# 添加生产环境域名（从环境变量读取）
-if cors_origins_env:
-    production_origins = [origin.strip() for origin in cors_origins_env.split(",")]
-    origins.extend(production_origins)
+allowed_origins = settings.CORS_ORIGINS
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,          # 允许的域列表
+    allow_origins=allowed_origins,          # 允许的域列表
     allow_credentials=True,         # 允许携带 Cookie
     allow_methods=["*"],            # 允许所有 HTTP 方法 (GET, POST, etc.)
     allow_headers=["*"],            # 允许所有请求头

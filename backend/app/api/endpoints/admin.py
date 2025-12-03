@@ -1,3 +1,4 @@
+# backend/app/api/endpoints/admin.py
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Body
 from sqlmodel import Session, select
@@ -19,14 +20,20 @@ from app.core.auth import (
     get_current_admin
 )
 from app.models.admin import Admin, AdminLogin
-from app.models.tool import Tool, ToolRead, ToolUpdate, ReviewStatus
+from app.models.tool import Tool, ReviewStatus
 from app.models.user import User
 from app.models.workflow_template import WorkflowTemplate, WorkflowNode
-from app.models.category_mapping import CategoryMapping
+from app.models.category import Category
+from app.models.tool_translation import ToolTranslation
+from app.models.tool_faq import ToolFAQ
 from datetime import datetime
 
 from scripts.content_generator import AIToolsSEOGenerator
 seo_generator = AIToolsSEOGenerator()
+import subprocess
+import time
+import shutil
+import tempfile
 
 router = APIRouter(
     prefix="/admin",
@@ -398,6 +405,67 @@ def import_seo_tools(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
+@router.post("/import-seo-auto-split")
+def import_seo_tools_auto_split(
+    file: UploadFile = File(...),
+    overwrite: bool = False,
+    db: Session = Depends(get_session),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """Upload a large tools JSON and run `import_tools_auto_split.py` server-side.
+
+    Saves the uploaded file under `backend/scripts/` with a timestamped name,
+    invokes the `import_tools_auto_split.py` script using the running Python
+    interpreter, and returns the script stdout/stderr and exit code.
+    """
+    try:
+        # Do not write files into the repository directory. Create a system
+        # temporary file and pass its path to the import script. The temp file
+        # will be removed after the script finishes.
+        filename = getattr(file, 'filename', f"upload_{int(time.time())}.json")
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.json')
+        try:
+            tmp.write(file.file.read())
+            tmp.flush()
+            dest_path = tmp.name
+        finally:
+            tmp.close()
+
+        # locate script in repository scripts/ but do not save uploads there
+        scripts_dir = os.path.abspath(os.path.join(backend_root, 'scripts'))
+        script_path = os.path.join(scripts_dir, 'import_tools_auto_split.py')
+        if not os.path.exists(script_path):
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Server missing import_tools_auto_split.py")
+        # The import script expects the filepath as a positional argument (sys.argv[1]).
+        cmd = [sys.executable, script_path, dest_path]
+
+        # run script (capture output); ensure temp file is removed afterward
+        try:
+            try:
+                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60*10)
+            except subprocess.TimeoutExpired:
+                raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Import script timed out")
+
+            return {
+                "success": proc.returncode == 0,
+                "returncode": proc.returncode,
+                "stdout": proc.stdout,
+                "stderr": proc.stderr,
+                "uploaded_file": filename
+            }
+        finally:
+            try:
+                if os.path.exists(dest_path):
+                    os.remove(dest_path)
+            except Exception:
+                pass
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 @router.delete("/delete/{table_key}")
 def delete_table_data(
     table_key: str,
@@ -415,7 +483,7 @@ def delete_table_data(
         "seo_tools": Tool,
         "users": User,
         "workflows": WorkflowTemplate,
-        "category_mapping": CategoryMapping
+        "category_mapping": Category
     }
 
     model = allowed.get(table_key)
@@ -427,8 +495,26 @@ def delete_table_data(
         if table_key == "workflows":
             db.exec(delete(WorkflowNode))
 
-        result = db.exec(delete(model))
-        db.commit()
+        # For tools, delete dependent child rows first to avoid FK constraint issues
+        if table_key == "seo_tools":
+            # Use table-level deletes to ensure SQL is executed directly against DB
+            # Delete translations and faqs which reference tools.id and commit before deleting tools
+            try:
+                res1 = db.exec(ToolTranslation.__table__.delete())
+                res2 = db.exec(ToolFAQ.__table__.delete())
+                # commit child deletes separately to ensure FK constraints are cleared
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                raise
+
+        # Use table-level delete for the target model to avoid ORM bulk-delete oddities
+        try:
+            result = db.exec(model.__table__.delete())
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
         # result.rowcount may be None depending on DB; return boolean and attempt count
         rows_deleted = getattr(result, 'rowcount', None)
         return {"deleted": True, "rows_deleted": rows_deleted}
@@ -615,7 +701,7 @@ def generate_category_mapping(
         stats = {"inserted": 0, "updated": 0, "skipped": 0}
         for orig_cat, disp_cat in new_mapping.items():
             try:
-                stmt = select(CategoryMapping).where(CategoryMapping.original_category == orig_cat)
+                stmt = select(Category).where(Category.original_category == orig_cat)
                 existing_row = db.exec(stmt).first()
                 if existing_row:
                     # if force is set, always overwrite and count as updated
@@ -634,7 +720,7 @@ def generate_category_mapping(
                         else:
                             stats["skipped"] += 1
                 else:
-                    new_row = CategoryMapping(original_category=orig_cat, display_category=disp_cat)
+                    new_row = Category(original_category=orig_cat, display_category=disp_cat)
                     db.add(new_row)
                     stats["inserted"] += 1
             except Exception:

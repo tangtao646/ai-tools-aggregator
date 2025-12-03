@@ -1,6 +1,8 @@
-from typing import List, Optional # 导入 Optional
+# backend/app/api/endpoints/tools.py
+from typing import List, Optional, Dict, Any 
+# 导入 and_ 以确保 JOIN 条件的鲁棒性
+from sqlmodel import Session, select, or_, func, distinct, column, and_ 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from sqlmodel import Session, select, or_ # 导入 or_ 和 select
 import os
 import uuid
 from pathlib import Path
@@ -8,13 +10,22 @@ from datetime import datetime
 
 from app.core.db import get_session
 from app.core.auth import get_current_user_optional
-from app.models.tool import Tool, ToolCreate, ToolRead, ToolUpdate, ReviewStatus
+from app.models.tool import Tool, ReviewStatus
 from app.models.user import User
-from app.models.category_mapping import CategoryMapping
+from app.models.tool_translation import ToolTranslation
+from app.models.tool_faq import ToolFAQ
+from app.models.formtool import FormTool
+from app.models.category import Category
 from app.utils.slug import generate_unique_slug
 import json
+import traceback
+import logging
 
+# 定义当前模块的 Logger，用于可靠地记录异常
+logger = logging.getLogger(__name__)
 
+# 默认查询语言代码
+DEFAULT_LANG_CODE = "zh" 
 
 # 创建 APIRouter 实例，用于定义路由
 router = APIRouter(
@@ -23,60 +34,106 @@ router = APIRouter(
 )
 
 # --------------------
-# 1. POST: 创建新工具 (P1 - 工具提交功能)
-# ... (保持不变)
+# 辅助函数: 构建基础 JOIN 查询
 # --------------------
-@router.post("/", response_model=ToolRead, status_code=status.HTTP_201_CREATED)
+def build_base_join_statement(lang_code: str = DEFAULT_LANG_CODE):
+    """构建 Tool 和 ToolTranslation 的基础 JOIN 语句，用于列表和详情查询。"""
+    # 关键修改：使用 and_ 明确组合 JOIN 条件，避免 Python 布尔 and 带来的歧义
+    join_condition = and_(Tool.id == ToolTranslation.tool_id, ToolTranslation.lang_code == lang_code)
+    
+    # 使用 LEFT OUTER JOIN 以确保即使没有翻译（例如新提交的工具），核心工具也能被选中
+    return select(Tool, ToolTranslation).join(
+        ToolTranslation, 
+        join_condition,
+        isouter=True # 使用 LEFT JOIN
+    )
+
+# --------------------
+# 1. POST: 创建新工具 (P1 - 工具提交功能)
+# --------------------
+@router.post("/", response_model=FormTool, status_code=status.HTTP_201_CREATED)
 def create_tool(
-    tool: ToolCreate, 
+    tool: FormTool, 
     db: Session = Depends(get_session),
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     提交一个新的 AI 工具。
-    如果用户已登录，自动关联到用户 ID。
-    自动生成 SEO 友好的 slug。
     """
-    db_tool = Tool.model_validate(tool)
+    # Build core Tool fields from the submitted FormTool
+    payload = tool.model_dump()
 
-    # Normalize supported_platforms: if frontend sent a JSON string like '[]', parse it to a list
-    if isinstance(db_tool.supported_platforms, str):
+    tool_fields = {}
+    core_keys = [
+        'name', 'slug', 'official_link', 'category', 'pricing_model', 'is_featured',
+        'tags', 'logo_url', 'rating', 'screenshots', 'video_url', 'supported_platforms',
+        'review_status', 'rejection_reason', 'submitter_id', 'submitter_email', 'edit_count'
+    ]
+    for k in core_keys:
+        if k in payload and payload[k] is not None:
+            tool_fields[k] = payload[k]
+
+    # Normalize supported_platforms
+    if 'supported_platforms' in tool_fields and isinstance(tool_fields['supported_platforms'], str):
         try:
-            db_tool.supported_platforms = json.loads(db_tool.supported_platforms)
+            tool_fields['supported_platforms'] = json.loads(tool_fields['supported_platforms'])
         except Exception:
-            db_tool.supported_platforms = []
-    
-    # 自动生成 slug（如果没有提供）
-    if not db_tool.slug:
-        db_tool.slug = generate_unique_slug(db, Tool, db_tool.name)
-    
-    # 如果用户已登录，记录提交者 ID
+            tool_fields['supported_platforms'] = []
+
+    # If user provided submitter info implicitly, prefer current_user
     if current_user:
-        db_tool.submitter_id = current_user.id
-        # 如果工具数据中没有邮箱，使用用户邮箱
-        if not db_tool.submitter_email and current_user.email:
-            db_tool.submitter_email = current_user.email
-    
-    # 自动生成 meta_title 和 meta_description（如果没有提供）
-    if not db_tool.meta_title:
-        db_tool.meta_title = f"{db_tool.name} - AI Tool Review & Guide"
-    
-    if not db_tool.meta_description:
-        # 截取描述的前 150 个字符
-        desc = db_tool.short_description if db_tool.short_description else db_tool.description
-        db_tool.meta_description = desc[:150] if len(desc) > 150 else desc
-    
+        tool_fields['submitter_id'] = current_user.id
+        if not tool_fields.get('submitter_email') and current_user.email:
+            tool_fields['submitter_email'] = current_user.email
+
+    # Create Tool row
+    db_tool = Tool(**tool_fields)
+    # Ensure slug
+    if not getattr(db_tool, 'slug', None):
+        db_tool.slug = generate_unique_slug(db, Tool, db_tool.name)
+
     db.add(db_tool)
     db.commit()
     db.refresh(db_tool)
 
-    # Ensure returned object has supported_platforms as a real list (avoid ResponseValidationError)
-    if isinstance(db_tool.supported_platforms, str):
-        try:
-            db_tool.supported_platforms = json.loads(db_tool.supported_platforms)
-        except Exception:
-            db_tool.supported_platforms = []
-    return db_tool
+    # Handle translations (default to 'en') and faqs
+    trans_keys = [
+        'description', 'short_description', 'category_name', 'features', 'use_cases',
+        'key_differentiators', 'pricing_details', 'meta_title', 'meta_description', 'pros', 'cons'
+    ]
+    trans_data = {k: payload.get(k) for k in trans_keys if payload.get(k) is not None}
+    if trans_data or payload.get('faqs'):
+        tr = ToolTranslation(tool_id=db_tool.id, lang_code=DEFAULT_LANG_CODE)
+        for k, v in trans_data.items():
+            setattr(tr, k, v)
+        db.add(tr)
+        db.commit()
+
+        # faqs
+        if payload.get('faqs'):
+            try:
+                # remove any existing faqs (shouldn't be any for new tool)
+                db.exec(ToolFAQ.__table__.delete().where(ToolFAQ.tool_id == db_tool.id))
+            except Exception:
+                pass
+            for idx, faq in enumerate(payload.get('faqs') or []):
+                q = faq.get('question') if isinstance(faq, dict) else None
+                a = faq.get('answer') if isinstance(faq, dict) else None
+                if q and a:
+                    newf = ToolFAQ(tool_id=db_tool.id, lang_code=DEFAULT_LANG_CODE, faq_order=idx, question=q, answer=a)
+                    db.add(newf)
+            db.commit()
+
+    # Return merged response (tool core + default translation if present)
+    tool_dict = db_tool.model_dump()
+    tr = db.exec(select(ToolTranslation).where(ToolTranslation.tool_id == db_tool.id, ToolTranslation.lang_code == DEFAULT_LANG_CODE)).first()
+    if tr:
+        for fld in trans_keys:
+            val = getattr(tr, fld, None)
+            if val is not None:
+                tool_dict[fld] = val
+
+    return tool_dict
 
 
 # --------------------
@@ -86,7 +143,6 @@ def create_tool(
 def upload_logo(file: UploadFile = File(...)):
     """
     接受单个图片上传，保存到 `static/logos/`，并返回可用于前端访问的 `logo_url`。
-    返回示例: {"logo_url": "/static/logos/<filename>.png"}
     """
     try:
         # 验证并准备保存路径
@@ -117,91 +173,112 @@ def upload_logo(file: UploadFile = File(...)):
         logo_url = f"/static/logos/{filename}"
         return {"logo_url": logo_url}
     except Exception as e:
+        logger.exception("Failed to upload file:") # 使用 logger.exception 确保打印堆栈
         raise HTTPException(status_code=500, detail=f"Failed to upload file: {e}")
 
 # --------------------
-# 2. GET: 获取工具列表 (P0 - 核心功能，添加搜索)
+# 2. GET: 获取工具列表 (P0 - 核心功能，已优化)
 # --------------------
 @router.get("/")
 def read_tools(
     offset: int = 0, 
     limit: int = 100,
-    category: Optional[str] = None, # 允许 category 为空
-    search: Optional[str] = None,   # 新增的搜索参数
+    category: Optional[str] = None, 
+    search: Optional[str] = None,   
     db: Session = Depends(get_session)
 ):
     """
     获取 AI 工具列表，支持分页、分类筛选和全局搜索 (名称/描述)。
-    只返回审核通过 (review_status=PUBLISHED) 的工具。
-    返回格式: { "items": [...], "total": 总数量 }
     """
-    # 构建基础查询条件
-    where_conditions = [Tool.review_status == ReviewStatus.PUBLISHED]
-    
-    # 1. 分类筛选逻辑
-    if category and category.lower() != '全部':
-        # If frontend sends a display_category (dynamic categories), resolve to original categories
-        try:
-            # try case-insensitive match on display_category
-            stmt = select(CategoryMapping.original_category).where(CategoryMapping.display_category.ilike(category))
-            res = db.exec(stmt).all()
-            origs = []
-            for r in res:
-                if isinstance(r, (list, tuple)):
-                    v = r[0] if len(r) > 0 else None
-                else:
-                    v = r
-                if v:
-                    origs.append(v)
-            if origs:
-                where_conditions.append(Tool.category.in_(origs))
-            else:
-                # fallback to direct match against Tool.category
-                where_conditions.append(Tool.category == category)
-        except Exception:
-            # if anything goes wrong, fallback to direct match
-            where_conditions.append(Tool.category == category)
+    try:
+        # 基础 JOIN 语句 (LEFT JOIN ToolTranslation ON lang_code='en')
+        base_statement = build_base_join_statement(DEFAULT_LANG_CODE)
         
-    # 2. 全局搜索逻辑
-    if search:
-        search_term = f"%{search}%" # SQL LIKE 模糊匹配格式
-        search_condition = or_(
-            Tool.name.ilike(search_term), # 不区分大小写的 LIKE
-            Tool.description.ilike(search_term)
-        )
-        where_conditions.append(search_condition)
-    
-    # 查询总数
-    count_statement = select(Tool).where(*where_conditions)
-    total = len(db.exec(count_statement).all())
-    
-    # 查询分页数据
-    statement = select(Tool).where(*where_conditions).offset(offset).limit(limit).order_by(Tool.created_at.desc())
-    tools = db.exec(statement).all()
-    
-    # 手动解析 JSON 字段
-    import json
-    parsed_tools = []
-    for tool in tools:
-        tool_dict = tool.model_dump()
+        where_conditions = [Tool.review_status == ReviewStatus.PUBLISHED]
         
-        # 解析 JSON 字符串为 Python 对象
-        if isinstance(tool_dict.get('supported_platforms'), str):
+        # 1. 分类筛选逻辑
+        if category and category.lower() != '全部':
+            original_category_found = False
             try:
-                tool_dict['supported_platforms'] = json.loads(tool_dict['supported_platforms'])
-            except (json.JSONDecodeError, TypeError):
-                tool_dict['supported_platforms'] = []
+                # 尝试通过 Category 表映射 display_category -> original_category (Tool.category)
+                stmt = select(Category.original_category).where(Category.display_category.ilike(category))
+                res = db.exec(stmt).all()
+                origs = [r[0] if isinstance(r, (list, tuple)) else r for r in res if (r[0] if isinstance(r, (list, tuple)) and len(r) > 0 else r) is not None]
+                
+                if origs:
+                    where_conditions.append(Tool.category.in_(origs))
+                    original_category_found = True
+                
+            except Exception:
+                pass 
+            
+            # 如果没有通过映射找到原始分类，则回退到直接匹配翻译表的 category_name
+            if not original_category_found:
+                 where_conditions.append(ToolTranslation.category_name.ilike(f"%{category}%"))
+
+        # 2. 全局搜索逻辑 (通过 JOIN 优化)
+        if search:
+            search_term = f"%{search}%" 
+            search_condition = or_(
+                Tool.name.ilike(search_term),                               # 搜索工具名称 (Tool表)
+                ToolTranslation.description.ilike(search_term),             # 搜索翻译描述 (Translation表)
+                ToolTranslation.short_description.ilike(search_term),       # 搜索翻译短描述 (Translation表)
+            )
+            where_conditions.append(search_condition)
         
-        parsed_tools.append(tool_dict)
-    
-    return {
-        "items": parsed_tools,
-        "total": total
-    }
+        # 3. 查询总数 (COUNT - 必须使用 DISTINCT(Tool.id) 避免 JOIN 产生的重复计数)
+        # 关键：使用 and_ 明确组合 JOIN 条件
+        count_join_condition = and_(Tool.id == ToolTranslation.tool_id, ToolTranslation.lang_code == DEFAULT_LANG_CODE)
+        total_statement = select(func.count(distinct(Tool.id))).select_from(Tool).join(
+            ToolTranslation, 
+            count_join_condition,
+            isouter=True # 修正：确保总数计算也使用 LEFT JOIN，避免因缺少翻译而计数为零
+        ).where(
+            *where_conditions
+        )
+        total = db.exec(total_statement).one_or_none() or 0
+        
+        # 4. 查询分页数据 (SELECT)
+        # 排序和分页应用于 JOIN 后的结果集
+        data_statement = base_statement.where(*where_conditions).offset(offset).limit(limit).order_by(Tool.created_at.desc())
+        results = db.exec(data_statement).all()
+        
+        # 5. 格式化输出
+        parsed_tools = []
+        for tool, trans in results:
+            tool_dict = tool.model_dump()
+
+            # 合并翻译字段
+            if trans:
+                for fld in ['description', 'short_description', 'category_name', 'features', 'use_cases', 'key_differentiators', 'pricing_details', 'meta_title', 'meta_description', 'pros', 'cons']:
+                    val = getattr(trans, fld, None)
+                    if val is not None:
+                        tool_dict[fld] = val
+
+            # 解析 JSON 字段
+            if isinstance(tool_dict.get('supported_platforms'), str):
+                try:
+                    tool_dict['supported_platforms'] = json.loads(tool_dict['supported_platforms'])
+                except (json.JSONDecodeError, TypeError):
+                    tool_dict['supported_platforms'] = []
+
+            parsed_tools.append(tool_dict)
+        
+        return {
+            "items": parsed_tools,
+            "total": total
+        }
+    except Exception as e:
+        # 使用 logger.exception 确保打印完整的堆栈信息
+        logger.exception("An error occurred while fetching tools (read_tools):")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"An error occurred while fetching tools: {str(e)}"
+        )
 
 
 # --------------------
-# Compact list for cards
+# Compact list for cards (已优化)
 # --------------------
 @router.get("/compact")
 def read_tools_compact(
@@ -215,114 +292,139 @@ def read_tools_compact(
 ):
     """
     返回精简的工具列表，用于前端卡片展示（性能友好，字段更小）。
-
-    每项包含：id, name, slug, logo_url, short_description, category, rating, pricing_model
-    返回格式: { "items": [...], "total": 总数量 }
     """
-    where_conditions = [Tool.review_status == ReviewStatus.PUBLISHED]
+    try:
+        # 基础 JOIN 语句 (LEFT JOIN ToolTranslation ON lang_code='en')
+        base_statement = build_base_join_statement(DEFAULT_LANG_CODE)
+        
+        where_conditions = [Tool.review_status == ReviewStatus.PUBLISHED]
+        
+        # 1. 类别过滤逻辑 (Category)
+        if category and category.lower() != 'all':
+            original_category_found = False
+            # 尝试通过 Category 表映射 display_category -> original_category (Tool.category)
+            try:
+                stmt = select(Category.original_category).where(Category.display_category.ilike(category))
+                res = db.exec(stmt).all()
+                origs = [r[0] if isinstance(r, (list, tuple)) else r for r in res if (r[0] if isinstance(r, (list, tuple)) and len(r) > 0 else r) is not None]
+                
+                if origs:
+                    where_conditions.append(Tool.category.in_(origs))
+                    original_category_found = True
+                
+            except Exception:
+                pass 
+            
+            # 如果没有通过映射找到原始分类，则回退到直接匹配翻译表的 category_name
+            if not original_category_found:
+                 where_conditions.append(ToolTranslation.category_name.ilike(f"%{category}%"))
 
-    if category and category.lower() != '全部':
-        try:
-            stmt = select(CategoryMapping.original_category).where(CategoryMapping.display_category.ilike(category))
-            res = db.exec(stmt).all()
-            origs = []
-            for r in res:
-                if isinstance(r, (list, tuple)):
-                    v = r[0] if len(r) > 0 else None
-                else:
-                    v = r
-                if v:
-                    origs.append(v)
-            if origs:
-                where_conditions.append(Tool.category.in_(origs))
-            else:
-                where_conditions.append(Tool.category == category)
-        except Exception:
-            where_conditions.append(Tool.category == category)
+        # 2. 搜索过滤逻辑 (Search)
+        if search:
+            search_term = f"%{search}%"
+            search_condition = or_(
+                Tool.name.ilike(search_term),                           # 搜索工具名称 (Tool表)
+                ToolTranslation.description.ilike(search_term),         # 搜索翻译描述 (Translation表)
+                ToolTranslation.short_description.ilike(search_term)    # 搜索翻译短描述 (Translation表)
+            )
+            where_conditions.append(search_condition)
 
-    if search:
-        search_term = f"%{search}%"
-        search_condition = or_(
-            Tool.name.ilike(search_term),
-            Tool.description.ilike(search_term)
+        # 3. 价格模型过滤 (Pricing Model)
+        if pricing_model:
+            where_conditions.append(Tool.pricing_model == pricing_model)
+
+        # 4. 评分过滤 (Rating)
+        if rating is not None:
+            try:
+                min_rating = float(rating)
+                where_conditions.append(Tool.rating >= min_rating)
+            except Exception:
+                pass 
+
+        # 5. 计算总数 (COUNT)
+        # 关键：使用 and_ 明确组合 JOIN 条件
+        count_join_condition = and_(Tool.id == ToolTranslation.tool_id, ToolTranslation.lang_code == DEFAULT_LANG_CODE)
+        total_statement = select(func.count(distinct(Tool.id))).select_from(Tool).join(
+            ToolTranslation, 
+            count_join_condition,
+            isouter=True # <<<<<<<<<<<<<<< 修正: 强制使用 LEFT JOIN，即使没有翻译也计算在内 >>>>>>>>>>>>>>>
+        ).where(
+            *where_conditions
         )
-        where_conditions.append(search_condition)
+        total = db.exec(total_statement).one_or_none() or 0
 
-    # filter by pricing model (exact match)
-    if pricing_model:
-        where_conditions.append(Tool.pricing_model == pricing_model)
+        # 6. 查询分页数据 (SELECT)
+        data_statement = base_statement.where(*where_conditions).order_by(Tool.created_at.desc()).offset(offset).limit(limit)
+        results = db.exec(data_statement).all()
+        
+        logging.debug(f"Compact tools query returned {len(results)} items out of total {total} matching tools.")
 
-    # filter by minimum rating (e.g., rating=4 returns tools with rating >= 4)
-    if rating is not None:
-        try:
-            min_rating = float(rating)
-            where_conditions.append(Tool.rating >= min_rating)
-        except Exception:
-            # ignore invalid rating param
-            pass
+        # 7. 格式化输出
+        compact_items = []
+        for t, tt in results:
+            # tt 可能为 None (因为是 LEFT JOIN)
+            short_desc = None
+            category_name = t.category
 
-    count_statement = select(Tool).where(*where_conditions)
-    total = len(db.exec(count_statement).all())
+            if tt:
+                # 优先使用翻译表的 short_description
+                short_desc = tt.short_description or (tt.description or "")[:160]
+                category_name = tt.category_name or t.category
 
-    statement = select(Tool).where(*where_conditions).offset(offset).limit(limit).order_by(Tool.created_at.desc())
-    tools = db.exec(statement).all()
+            compact_items.append({
+                "id": t.id,
+                "name": t.name or "",
+                "slug": t.slug or "",
+                "logo_url": t.logo_url or "",
+                "short_description": short_desc or "",
+                "category": category_name or "", # 优先使用翻译的类别名称
+                "rating": float(t.rating) if t.rating is not None else None,
+                "pricing_model": t.pricing_model or ""
+            })
 
-    compact_items = []
-    for t in tools:
-        compact_items.append({
-            "id": t.id,
-            "name": t.name or "",
-            "slug": t.slug or "",
-            "logo_url": t.logo_url or "",
-            "short_description": t.short_description or (t.description or "")[:160],
-            "category": t.category or "",
-            "rating": float(t.rating) if t.rating is not None else None,
-            "pricing_model": t.pricing_model or ""
-        })
-
-    return {"items": compact_items, "total": total}
+        return {"items": compact_items, "total": total}
+    
+    except Exception as e:
+        # 关键：使用 logger.exception 代替 traceback.print_exc() 来可靠地打印堆栈信息
+        logger.exception("An error occurred while fetching compact tools (read_tools_compact):")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"An error occurred while fetching compact tools: {str(e)}"
+        )
 
 
 # --------------------
-# GET: distinct display categories from CategoryMapping
+# GET: distinct display categories from CategoryMapping (保持不变)
 # --------------------
 @router.get("/display-categories")
 def get_display_categories(db: Session = Depends(get_session)):
     """
     返回 `CategoryMapping.display_category` 的去重列表，用于前端在首页展示动态分类。
-    返回格式: { "display_categories": ["分类A", "分类B", ...], "count": N }
     """
     try:
-        stmt = select(CategoryMapping.display_category)
+        stmt = select(Category.display_category)
         result = db.exec(stmt).all()
-        # result may be a list of scalars or list of 1-tuples depending on driver/version
         vals = []
         for r in result:
-            if isinstance(r, (list, tuple)):
-                v = r[0] if len(r) > 0 else None
-            else:
-                v = r
+            v = r[0] if isinstance(r, (list, tuple)) and len(r) > 0 else r
             if v:
                 vals.append(v)
         cats = sorted(set(vals))
         return {"display_categories": cats, "count": len(cats)}
     except Exception as e:
+        logger.exception("Error fetching display categories:")
         raise HTTPException(status_code=500, detail=str(e))
 
 # --------------------
-# 3. GET: 查询当前用户提交的工具（必须放在 /{tool_id} 之前）
+# 3. GET: 查询当前用户提交的工具 (已优化)
 # --------------------
-@router.get("/my-submissions", response_model=List[ToolRead])
+@router.get("/my-submissions", response_model=List[FormTool])
 def get_my_submissions(
     db: Session = Depends(get_session),
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     查询当前登录用户提交的工具（仅返回待审核和可编辑的审核不通过的）
-    优先使用 submitter_id 查询，如果没有则使用 submitter_email（兼容旧数据）
-    过滤规则：
-    1. 只返回待审核(PENDING)和审核不通过(REJECTED)的工具
-    2. 审核不通过且修改次数>=3的也过滤掉（已达修改上限）
     """
     if not current_user:
         raise HTTPException(
@@ -330,85 +432,106 @@ def get_my_submissions(
             detail="请先登录"
         )
     
-    # 查询条件：
-    # 1. 待审核(PENDING)的全部显示
-    # 2. 审核不通过(REJECTED)且修改次数<3的显示
-    statement = select(Tool).where(
-        or_(
-            Tool.submitter_id == current_user.id,
-            Tool.submitter_email == current_user.email
-        ),
-        or_(
-            Tool.review_status == ReviewStatus.PENDING,  # 待审核的全部显示
-            (Tool.review_status == ReviewStatus.REJECTED) & (Tool.edit_count < 3)  # 不通过且未达修改上限的显示
+    try:
+        # 基础 JOIN 语句 (LEFT JOIN ToolTranslation ON lang_code='en')
+        base_statement = build_base_join_statement(DEFAULT_LANG_CODE)
+
+        # 查询条件
+        where_conditions = [
+            or_(
+                Tool.submitter_id == current_user.id,
+                Tool.submitter_email == current_user.email
+            ),
+            or_(
+                Tool.review_status == ReviewStatus.PENDING,  # 待审核的全部显示
+                (Tool.review_status == ReviewStatus.REJECTED) & (Tool.edit_count < 3)  # 不通过且未达修改上限的显示
+            )
+        ]
+        
+        statement = base_statement.where(*where_conditions).order_by(Tool.created_at.desc())
+        results = db.exec(statement).all()
+
+        # 格式化输出
+        parsed_tools = []
+        import json as _json
+        for tool, trans in results:
+            tool_dict = tool.model_dump()
+            
+            # 合并翻译
+            if trans:
+                for fld in ['description', 'short_description', 'category_name', 'features', 'use_cases', 'key_differentiators', 'pricing_details', 'meta_title', 'meta_description', 'pros', 'cons']:
+                    val = getattr(trans, fld, None)
+                    if val is not None:
+                        tool_dict[fld] = val
+
+            # 解析 supported_platforms
+            if isinstance(tool_dict.get('supported_platforms'), str):
+                try:
+                    tool_dict['supported_platforms'] = _json.loads(tool_dict['supported_platforms'])
+                except (ValueError, TypeError):
+                    tool_dict['supported_platforms'] = []
+            parsed_tools.append(tool_dict)
+
+        return parsed_tools
+    except Exception as e:
+        logger.exception("Error fetching user submissions:")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"An error occurred while fetching submissions: {str(e)}"
         )
-    ).order_by(Tool.created_at.desc())
-    
-    tools = db.exec(statement).all()
 
-    # Ensure supported_platforms is a proper list in the response
-    parsed_tools = []
-    import json as _json
-    for tool in tools:
-        tool_dict = tool.model_dump()
-        if isinstance(tool_dict.get('supported_platforms'), str):
-            try:
-                tool_dict['supported_platforms'] = _json.loads(tool_dict['supported_platforms'])
-            except (ValueError, TypeError):
-                tool_dict['supported_platforms'] = []
-        parsed_tools.append(tool_dict)
-
-    return parsed_tools
 
 # --------------------
-# 4. GET: 获取单个工具详情（支持 ID 和 Slug）
+# 4. GET: 获取单个工具详情（支持 ID 和 Slug）(已优化)
 # --------------------
 @router.get("/{identifier}")
 def read_tool(*, identifier: str, db: Session = Depends(get_session)):
     """
     获取指定 ID 或 Slug 的 AI 工具详情。
-    
-    - 如果 identifier 是纯数字，按 ID 查询
-    - 否则按 slug 查询
-    
-    注意：alternatives 和 comparison_data 通过独立接口获取
     """
-    # 判断是 ID 还是 slug
-    if identifier.isdigit():
-        # 按 ID 查询
-        tool = db.get(Tool, int(identifier))
-    else:
-        # 按 slug 查询
-        statement = select(Tool).where(Tool.slug == identifier)
-        tool = db.exec(statement).first()
-    
-    if not tool:
-        raise HTTPException(status_code=404, detail="Tool not found")
-    
-    # 手动解析 JSON 字段
-    import json
-    tool_dict = tool.model_dump()
-    
-    # 解析 JSON 字符串为 Python 对象
-    if isinstance(tool_dict.get('supported_platforms'), str):
-        try:
-            tool_dict['supported_platforms'] = json.loads(tool_dict['supported_platforms'])
-        except (json.JSONDecodeError, TypeError):
-            tool_dict['supported_platforms'] = []
-    
-    return tool_dict
+    try:
+        # 1. 查找核心工具
+        if identifier.isdigit():
+            tool = db.get(Tool, int(identifier))
+        else:
+            statement = select(Tool).where(Tool.slug == identifier)
+            tool = db.exec(statement).first()
+        
+        if not tool:
+            raise HTTPException(status_code=404, detail="Tool not found")
+        
+        # 2. 查找所有翻译
+        import json
+        tool_dict = tool.model_dump()
+        transs_stmt = select(ToolTranslation).where(ToolTranslation.tool_id == tool.id)
+        transs = db.exec(transs_stmt).all()
+        tool_dict['translations'] = [t.model_dump() for t in transs] if transs else []
+        
+        # 3. 查找所有 FAQ
+        faqs_stmt = select(ToolFAQ).where(ToolFAQ.tool_id == tool.id).order_by(ToolFAQ.faq_order)
+        faqs = db.exec(faqs_stmt).all()
+        tool_dict['faqs'] = [f.model_dump() for f in faqs] if faqs else []
+
+        # 4. 解析 supported_platforms
+        if isinstance(tool_dict.get('supported_platforms'), str):
+            try:
+                tool_dict['supported_platforms'] = json.loads(tool_dict['supported_platforms'])
+            except (json.JSONDecodeError, TypeError):
+                tool_dict['supported_platforms'] = []
+
+        return tool_dict
+    except Exception as e:
+        logger.exception(f"Error reading tool detail for {identifier}:")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch tool detail: {str(e)}")
+
 
 # --------------------
-# 5. PUT/PATCH: 更新工具
-# ... (保持不变)
+# 5. PUT/PATCH: 更新工具 (保持不变)
 # --------------------
-@router.patch("/{tool_id}", response_model=ToolRead)
-def update_tool(*, tool_id: int, tool: ToolUpdate, db: Session = Depends(get_session)):
+@router.patch("/{tool_id}", response_model=FormTool)
+def update_tool(*, tool_id: int, tool: FormTool, db: Session = Depends(get_session)):
     """
     更新指定 ID 的 AI 工具信息。
-    只允许编辑审核不通过（review_status=REJECTED）的工具。
-    编辑后工具状态会自动重置为待审核（review_status=PENDING）。
-    每个工具最多可修改 3 次。
     """
     db_tool = db.get(Tool, tool_id)
     if not db_tool:
@@ -428,7 +551,7 @@ def update_tool(*, tool_id: int, tool: ToolUpdate, db: Session = Depends(get_ses
             detail="此工具已达到最大修改次数（3次）限制。如需进一步修改，请联系管理员。"
         )
     
-    # 使用 Pydantic 的 copy_with_update 方法更新字段
+    # 使用 Pydantic 的 copy_with_update 方法更新字段，并处理翻译字段
     try:
         tool_data = tool.model_dump(exclude_unset=True)
 
@@ -439,6 +562,13 @@ def update_tool(*, tool_id: int, tool: ToolUpdate, db: Session = Depends(get_ses
             except Exception:
                 tool_data['supported_platforms'] = []
 
+        # Separate translatable fields
+        trans_fields = {}
+        for fld in ['description', 'short_description', 'category_name', 'features', 'use_cases', 'key_differentiators', 'pricing_details', 'meta_title', 'meta_description', 'pros', 'cons', 'faqs']:
+            if fld in tool_data:
+                trans_fields[fld] = tool_data.pop(fld)
+
+        # Update core tool fields
         db_tool.sqlmodel_update(tool_data)
 
         # 如果名称发生变化，重新生成 slug
@@ -457,25 +587,49 @@ def update_tool(*, tool_id: int, tool: ToolUpdate, db: Session = Depends(get_ses
 
         db.add(db_tool)
         db.commit()
+
+        # Handle translations (update or create default 'en')
+        if trans_fields:
+            tr = db.exec(select(ToolTranslation).where(ToolTranslation.tool_id == db_tool.id, ToolTranslation.lang_code == DEFAULT_LANG_CODE)).first()
+            if not tr:
+                tr = ToolTranslation(tool_id=db_tool.id, lang_code=DEFAULT_LANG_CODE)
+            # faqs special handling
+            faqs_val = trans_fields.pop('faqs', None) if 'faqs' in trans_fields else None
+            for k, v in trans_fields.items():
+                setattr(tr, k, v)
+            db.add(tr)
+            db.commit()
+
+            if faqs_val is not None:
+                # replace faqs
+                db.exec(ToolFAQ.__table__.delete().where(ToolFAQ.tool_id == db_tool.id))
+                for idx, faq in enumerate(faqs_val or []):
+                    q = faq.get('question') if isinstance(faq, dict) else None
+                    a = faq.get('answer') if isinstance(faq, dict) else None
+                    if q and a:
+                        newf = ToolFAQ(tool_id=db_tool.id, lang_code=DEFAULT_LANG_CODE, faq_order=idx, question=q, answer=a)
+                        db.add(newf)
+                db.commit()
+
         db.refresh(db_tool)
 
-        # Ensure supported_platforms is a real list before returning
-        if isinstance(db_tool.supported_platforms, str):
-            try:
-                db_tool.supported_platforms = json.loads(db_tool.supported_platforms)
-            except Exception:
-                db_tool.supported_platforms = []
+        # return merged dict (tool + default translation)
+        tool_dict = db_tool.model_dump()
+        tr = db.exec(select(ToolTranslation).where(ToolTranslation.tool_id == db_tool.id, ToolTranslation.lang_code == DEFAULT_LANG_CODE)).first()
+        if tr:
+            for fld in ['description', 'short_description', 'category_name', 'features', 'use_cases', 'key_differentiators', 'pricing_details', 'meta_title', 'meta_description', 'pros', 'cons']:
+                val = getattr(tr, fld, None)
+                if val is not None:
+                    tool_dict[fld] = val
 
-        return db_tool
+        return tool_dict
     except Exception as e:
         # Log and return clearer error for debugging
-        import traceback
-        traceback.print_exc()
+        logger.exception("Failed to update tool:")
         raise HTTPException(status_code=500, detail=f"Failed to update tool: {e}")
 
 # --------------------
-# 5. DELETE: 删除工具
-# ... (保持不变)
+# 5. DELETE: 删除工具 (保持不变)
 # --------------------
 @router.delete("/{tool_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_tool(*, tool_id: int, db: Session = Depends(get_session)):
@@ -486,52 +640,71 @@ def delete_tool(*, tool_id: int, db: Session = Depends(get_session)):
     if not tool:
         raise HTTPException(status_code=404, detail="Tool not found")
     
-    db.delete(tool)
-    db.commit()
-    return None
-
+    try:
+        db.delete(tool)
+        db.commit()
+        return None
+    except Exception as e:
+        logger.exception(f"Error deleting tool {tool_id}:")
+        raise HTTPException(status_code=500, detail=f"Failed to delete tool: {str(e)}")
 
 
 # --------------------
-# 9. GET: 获取同类推荐工具（简化列表）
+# 9. GET: 获取同类推荐工具（简化列表）(已优化)
 # --------------------
 @router.get("/{identifier}/related")
 def get_related_tools(*, identifier: str, limit: int = 5, db: Session = Depends(get_session)):
     """
     获取与指定工具同类的推荐工具（简化字段列表）
-
-    返回格式为列表，每项包含：id, name, slug, logo_url, short_description, category, rating, pricing_model
     """
-    # 获取当前工具
-    if identifier.isdigit():
-        tool = db.get(Tool, int(identifier))
-    else:
-        statement = select(Tool).where(Tool.slug == identifier)
-        tool = db.exec(statement).first()
+    try:
+        # 1. 查找当前工具以获取 category
+        if identifier.isdigit():
+            tool = db.get(Tool, int(identifier))
+        else:
+            statement = select(Tool).where(Tool.slug == identifier)
+            tool = db.exec(statement).first()
 
-    if not tool:
-        raise HTTPException(status_code=404, detail="Tool not found")
+        if not tool:
+            raise HTTPException(status_code=404, detail="Tool not found")
 
-    # 查询同分类已发布的工具，按 rating 降序，排除当前工具
-    stmt = select(Tool).where(
-        Tool.category == tool.category,
-        Tool.id != tool.id,
-        Tool.review_status == ReviewStatus.PUBLISHED
-    ).order_by(Tool.rating.desc()).limit(limit)
+        # 2. 构建 JOIN 语句查询同分类工具
+        base_statement = build_base_join_statement(DEFAULT_LANG_CODE)
 
-    results = db.exec(stmt).all()
+        # 查询条件：同分类，排除当前工具，已发布
+        where_conditions = [
+            Tool.category == tool.category,
+            Tool.id != tool.id,
+            Tool.review_status == ReviewStatus.PUBLISHED
+        ]
 
-    related = []
-    for t in results:
-        related.append({
-            "id": t.id,
-            "name": t.name or "",
-            "slug": t.slug or "",
-            "logo_url": t.logo_url or "",
-            "short_description": t.short_description or "",
-            "category": t.category or "",
-            "rating": float(t.rating) if t.rating is not None else None,
-            "pricing_model": t.pricing_model or ""
-        })
+        # 3. 执行查询
+        stmt = base_statement.where(*where_conditions).order_by(Tool.rating.desc()).limit(limit)
+        results = db.exec(stmt).all()
 
-    return related
+        # 4. 格式化输出
+        related = []
+        for t, tt in results:
+            # tt 可能为 None (因为是 LEFT JOIN)
+            short_desc = None
+            category_name = t.category
+
+            if tt:
+                short_desc = tt.short_description or (tt.description or "")[:160]
+                category_name = tt.category_name or t.category
+
+            related.append({
+                "id": t.id,
+                "name": t.name or "",
+                "slug": t.slug or "",
+                "logo_url": t.logo_url or "",
+                "short_description": short_desc or "",
+                "category": category_name or "",
+                "rating": float(t.rating) if t.rating is not None else None,
+                "pricing_model": t.pricing_model or ""
+            })
+
+        return related
+    except Exception as e:
+        logger.exception(f"Error fetching related tools for {identifier}:")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch related tools: {str(e)}")

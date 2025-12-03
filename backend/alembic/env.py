@@ -11,6 +11,16 @@ import os
 current_dir = os.path.dirname(os.path.abspath(__file__))
 backend_root = os.path.join(current_dir, '..') # /backend
 sys.path.append(backend_root)
+# Load project .env so DATABASE_URL and other env vars are available to Alembic
+try:
+    from dotenv import load_dotenv
+    repo_root = os.path.abspath(os.path.join(backend_root, '..'))
+    env_path = os.path.join(repo_root, '.env')
+    if os.path.exists(env_path):
+        load_dotenv(env_path)
+except Exception:
+    # If python-dotenv isn't installed or loading fails, continue — alembic will use env vars if set
+    pass
 
 # --- 2. 导入 SQLModel 和 db.py 模块 ---
 from sqlmodel import SQLModel 
@@ -83,7 +93,7 @@ def run_migrations_online() -> None:
     DATABASE_URL = os.environ.get("DATABASE_URL")
     if not DATABASE_URL:
         # 本地开发 URL - 确保与您本地环境匹配
-        DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:5432/aitools"
+        DATABASE_URL = "postgresql://user:db625749TT@postgres:5432/aitools"
 
     connectable = create_engine(DATABASE_URL)
 

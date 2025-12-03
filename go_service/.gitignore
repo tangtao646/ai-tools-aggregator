@@ -1,0 +1,82 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+
+# Test binary
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+
+# Environment files
+.env
+.env.local
+
+# Do NOT commit corporate certs
+certs/corp.crt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Runtime data and logs
+*.log
+server.log
+errors.log
+server.pid
+
+# Generated translation outputs (if you prefer to keep data/ tracked, use more specific patterns)
+# data/translation_*.json
+
+# Certificates and keys (do not commit private keys or local certs)
+certs/*.key
+certs/*.pem
+certs/*.crt
+
+# Temporary DB files or backups
+*.db
+*.sqlite
+*.backup
+
+# Environment variations - keep `.env.example` tracked
+.env.*
+!.env.example
+
+# Editor/project files
+.cache/
+
+# Temporary/backups
+*.bak
+*.tmp
+tmp/
+temp/
+
+# Uploads and runtime storage
+uploads/
+
+# PID files
+*.pid
+
+# Build output directories
+build/
+
+# Ignore compiled command binaries placed in cmd subfolders (keep source/main.go tracked)
+cmd/*/server
+*.json
+test_*
+
+

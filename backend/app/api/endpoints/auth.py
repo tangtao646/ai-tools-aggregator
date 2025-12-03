@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Body
 from sqlmodel import Session, select
 from app.core.db import get_session
 from app.models.user import User
@@ -12,7 +12,7 @@ router = APIRouter()
 
 @router.post("/auth/google")
 async def google_login(
-    request: dict,
+    request: dict = Body(...),
     session: Session = Depends(get_session)
 ):
     """
@@ -63,16 +63,17 @@ async def google_login(
             session.commit()
             session.refresh(user)
         
-        # 生成 JWT token
+        # 生成 JWT token (返回与其他登录接口一致的字段名)
         access_token = create_access_token(
             data={
                 "sub": user.email or str(user.id),  # Google 登录一般都有邮箱
                 "user_id": user.id
             }
         )
-        
+
         return {
-            "token": access_token,
+            "access_token": access_token,
+            "token_type": "bearer",
             "user": {
                 "id": user.id,
                 "email": user.email,
@@ -89,7 +90,7 @@ async def google_login(
 
 @router.post("/auth/github")
 async def github_login(
-    request: dict,
+    request: dict = Body(...),
     session: Session = Depends(get_session)
 ):
     """
@@ -188,11 +189,11 @@ async def github_login(
         # 生成 JWT token（使用 user_id 作为主键，sub 使用 github_id 或 email）
         jwt_token = create_access_token(
             data={
-                "sub": user.email or user.github_id or str(user.id),  # 至少要有一个标识
+                "sub": user.email or user.github_id or str(user.id),
                 "user_id": user.id
             }
         )
-        
+
         print(f"🔐 GitHub 登录成功 - 用户: {user.name} (ID: {user.id})")
         print(f"📧 Email: {user.email}")
         print(f"🆔 GitHub ID: {user.github_id}")
@@ -209,7 +210,8 @@ async def github_login(
             print(f"✗ Token 自验证失败: {e}")
         
         return {
-            "token": jwt_token,
+            "access_token": jwt_token,
+            "token_type": "bearer",
             "user": {
                 "id": user.id,
                 "email": user.email,

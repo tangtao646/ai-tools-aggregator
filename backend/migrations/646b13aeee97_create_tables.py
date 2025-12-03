@@ -1,8 +1,8 @@
-"""initial_database_creation_clean_final
+"""create tables
 
-Revision ID: 9d29a0b9c1af
+Revision ID: 646b13aeee97
 Revises: 
-Create Date: 2025-11-28 23:01:23.811934
+Create Date: 2025-11-30 11:18:06.691232
 
 """
 from typing import Sequence, Union
@@ -13,7 +13,7 @@ import sqlmodel
 
 
 # revision identifiers, used by Alembic.
-revision: str = '9d29a0b9c1af'
+revision: str = '646b13aeee97'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -30,15 +30,14 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_admin_username'), 'admin', ['username'], unique=True)
-    op.create_table('categorymapping',
+    op.create_table('categories',
     sa.Column('original_category', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-    sa.Column('display_category', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.Column('updated_at', sa.DateTime(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_categorymapping_original_category'), 'categorymapping', ['original_category'], unique=False)
+    op.create_index(op.f('ix_categories_original_category'), 'categories', ['original_category'], unique=True)
     op.create_table('users',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('email', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
@@ -54,49 +53,46 @@ def upgrade() -> None:
     sa.UniqueConstraint('google_id')
     )
     op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
-    op.create_table('tool',
+    op.create_table('category_translations',
+    sa.Column('lang_code', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('display_category', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('category_id', sa.Integer(), nullable=False),
+    sa.ForeignKeyConstraint(['category_id'], ['categories.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_category_translations_category_id'), 'category_translations', ['category_id'], unique=False)
+    op.create_index(op.f('ix_category_translations_lang_code'), 'category_translations', ['lang_code'], unique=False)
+    op.create_table('tools',
     sa.Column('name', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('slug', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
-    sa.Column('description', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-    sa.Column('short_description', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('official_link', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('category', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-    sa.Column('category_name', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('pricing_model', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('is_featured', sa.Boolean(), nullable=False),
     sa.Column('tags', sa.JSON(), nullable=True),
     sa.Column('logo_url', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+    sa.Column('rating', sa.Float(), nullable=True),
+    sa.Column('screenshots', sa.JSON(), nullable=True),
+    sa.Column('video_url', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+    sa.Column('supported_platforms', sa.JSON(), nullable=True),
     sa.Column('review_status', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('rejection_reason', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
     sa.Column('submitter_id', sa.Integer(), nullable=True),
     sa.Column('submitter_email', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
     sa.Column('edit_count', sa.Integer(), nullable=False),
-    sa.Column('features', sa.JSON(), nullable=True),
-    sa.Column('use_cases', sa.JSON(), nullable=True),
-    sa.Column('key_differentiators', sa.JSON(), nullable=True),
-    sa.Column('pricing_details', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
-    sa.Column('meta_title', sqlmodel.sql.sqltypes.AutoString(length=60), nullable=True),
-    sa.Column('meta_description', sqlmodel.sql.sqltypes.AutoString(length=160), nullable=True),
-    sa.Column('pros', sa.JSON(), nullable=True),
-    sa.Column('cons', sa.JSON(), nullable=True),
-    sa.Column('faqs', sa.JSON(), nullable=True),
-    sa.Column('rating', sa.Float(), nullable=True),
-    sa.Column('screenshots', sa.JSON(), nullable=True),
-    sa.Column('video_url', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
-    sa.Column('supported_platforms', sa.JSON(), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.Column('updated_at', sa.DateTime(), nullable=False),
     sa.Column('id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['submitter_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_tool_category'), 'tool', ['category'], unique=False)
-    op.create_index(op.f('ix_tool_category_name'), 'tool', ['category_name'], unique=False)
-    op.create_index(op.f('ix_tool_name'), 'tool', ['name'], unique=False)
-    op.create_index(op.f('ix_tool_review_status'), 'tool', ['review_status'], unique=False)
-    op.create_index(op.f('ix_tool_slug'), 'tool', ['slug'], unique=True)
-    op.create_index(op.f('ix_tool_submitter_email'), 'tool', ['submitter_email'], unique=False)
-    op.create_index(op.f('ix_tool_submitter_id'), 'tool', ['submitter_id'], unique=False)
+    op.create_index(op.f('ix_tools_category'), 'tools', ['category'], unique=False)
+    op.create_index(op.f('ix_tools_name'), 'tools', ['name'], unique=False)
+    op.create_index(op.f('ix_tools_review_status'), 'tools', ['review_status'], unique=False)
+    op.create_index(op.f('ix_tools_slug'), 'tools', ['slug'], unique=True)
+    op.create_index(op.f('ix_tools_submitter_email'), 'tools', ['submitter_email'], unique=False)
+    op.create_index(op.f('ix_tools_submitter_id'), 'tools', ['submitter_id'], unique=False)
     op.create_table('workflowtemplate',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('title', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
@@ -113,6 +109,39 @@ def upgrade() -> None:
     op.create_index(op.f('ix_workflowtemplate_category'), 'workflowtemplate', ['category'], unique=False)
     op.create_index(op.f('ix_workflowtemplate_status'), 'workflowtemplate', ['status'], unique=False)
     op.create_index(op.f('ix_workflowtemplate_title'), 'workflowtemplate', ['title'], unique=False)
+    op.create_table('tool_faqs',
+    sa.Column('lang_code', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('faq_order', sa.Integer(), nullable=False),
+    sa.Column('question', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('answer', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('tool_id', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['tool_id'], ['tools.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_tool_faqs_lang_code'), 'tool_faqs', ['lang_code'], unique=False)
+    op.create_index(op.f('ix_tool_faqs_tool_id'), 'tool_faqs', ['tool_id'], unique=False)
+    op.create_table('tool_translations',
+    sa.Column('lang_code', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('description', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('short_description', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('category_name', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('features', sa.JSON(), nullable=True),
+    sa.Column('use_cases', sa.JSON(), nullable=True),
+    sa.Column('key_differentiators', sa.JSON(), nullable=True),
+    sa.Column('pricing_details', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+    sa.Column('meta_title', sqlmodel.sql.sqltypes.AutoString(length=60), nullable=True),
+    sa.Column('meta_description', sqlmodel.sql.sqltypes.AutoString(length=160), nullable=True),
+    sa.Column('pros', sa.JSON(), nullable=True),
+    sa.Column('cons', sa.JSON(), nullable=True),
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('tool_id', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['tool_id'], ['tools.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_tool_translations_category_name'), 'tool_translations', ['category_name'], unique=False)
+    op.create_index(op.f('ix_tool_translations_lang_code'), 'tool_translations', ['lang_code'], unique=False)
+    op.create_index(op.f('ix_tool_translations_tool_id'), 'tool_translations', ['tool_id'], unique=False)
     op.create_table('workflownode',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('template_id', sa.Integer(), nullable=True),
@@ -132,22 +161,31 @@ def downgrade() -> None:
     # ### commands auto generated by Alembic - please adjust! ###
     op.drop_index(op.f('ix_workflownode_order'), table_name='workflownode')
     op.drop_table('workflownode')
+    op.drop_index(op.f('ix_tool_translations_tool_id'), table_name='tool_translations')
+    op.drop_index(op.f('ix_tool_translations_lang_code'), table_name='tool_translations')
+    op.drop_index(op.f('ix_tool_translations_category_name'), table_name='tool_translations')
+    op.drop_table('tool_translations')
+    op.drop_index(op.f('ix_tool_faqs_tool_id'), table_name='tool_faqs')
+    op.drop_index(op.f('ix_tool_faqs_lang_code'), table_name='tool_faqs')
+    op.drop_table('tool_faqs')
     op.drop_index(op.f('ix_workflowtemplate_title'), table_name='workflowtemplate')
     op.drop_index(op.f('ix_workflowtemplate_status'), table_name='workflowtemplate')
     op.drop_index(op.f('ix_workflowtemplate_category'), table_name='workflowtemplate')
     op.drop_table('workflowtemplate')
-    op.drop_index(op.f('ix_tool_submitter_id'), table_name='tool')
-    op.drop_index(op.f('ix_tool_submitter_email'), table_name='tool')
-    op.drop_index(op.f('ix_tool_slug'), table_name='tool')
-    op.drop_index(op.f('ix_tool_review_status'), table_name='tool')
-    op.drop_index(op.f('ix_tool_name'), table_name='tool')
-    op.drop_index(op.f('ix_tool_category_name'), table_name='tool')
-    op.drop_index(op.f('ix_tool_category'), table_name='tool')
-    op.drop_table('tool')
+    op.drop_index(op.f('ix_tools_submitter_id'), table_name='tools')
+    op.drop_index(op.f('ix_tools_submitter_email'), table_name='tools')
+    op.drop_index(op.f('ix_tools_slug'), table_name='tools')
+    op.drop_index(op.f('ix_tools_review_status'), table_name='tools')
+    op.drop_index(op.f('ix_tools_name'), table_name='tools')
+    op.drop_index(op.f('ix_tools_category'), table_name='tools')
+    op.drop_table('tools')
+    op.drop_index(op.f('ix_category_translations_lang_code'), table_name='category_translations')
+    op.drop_index(op.f('ix_category_translations_category_id'), table_name='category_translations')
+    op.drop_table('category_translations')
     op.drop_index(op.f('ix_users_email'), table_name='users')
     op.drop_table('users')
-    op.drop_index(op.f('ix_categorymapping_original_category'), table_name='categorymapping')
-    op.drop_table('categorymapping')
+    op.drop_index(op.f('ix_categories_original_category'), table_name='categories')
+    op.drop_table('categories')
     op.drop_index(op.f('ix_admin_username'), table_name='admin')
     op.drop_table('admin')
     # ### end Alembic commands ###

@@ -1,8 +1,10 @@
+//frontend/src/pages/Home.jsx
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { toolApi } from '../api/apiClient'; // 恢复原始导入
 import ToolCard from '../components/common/ToolCard'; // 恢复原始导入
 import { CATEGORIES } from '../constants/categories'; // 恢复原始导入
 import { useI18n } from '../i18n/I18nContext'; // 恢复原始导入
+// caching removed per request
 
 
 // --- 辅助组件 ---
@@ -30,7 +32,7 @@ const FilterButton = React.memo(({ category, isActive, onClick }) => {
 // --- 主组件 ---
 
 const Home = ({ onNavigateToDetail }) => {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
 
     // 状态管理
     const [tools, setTools] = useState([]); // 从后端获取的工具列表
@@ -39,7 +41,8 @@ const Home = ({ onNavigateToDetail }) => {
     const [error, setError] = useState(null); // 错误信息
     const [searchTerm, setSearchTerm] = useState('');
     const [inputValue, setInputValue] = useState(''); // 负责搜索框显示内容
-    const [activeCategory, setActiveCategory] = useState('all'); // 改为小写 'all'
+    // activeCategory stores a canonical key (prefer English label lowercased, fall back to zh)
+    const [activeCategory, setActiveCategory] = useState('all'); // 'all' or canonical key
     const [pricingModel, setPricingModel] = useState('');
     const [rating, setRating] = useState('');
     const [displayCategories, setDisplayCategories] = useState([]); // 动态分类
@@ -50,75 +53,94 @@ const Home = ({ onNavigateToDetail }) => {
     const offsetRef = useRef(0);
     const hasMoreRef = useRef(true);
     const sentinelRef = useRef(null);
-    const initialLoadDoneRef = useRef(false); // <--- 新增：用于标记第一次数据是否加载完成
+    const initialLoadDoneRef = useRef(false); // <--- 用于标记第一次数据是否加载完成
 
     // 计算总页数（仅用于显示或逻辑判断，如果需要）
     const totalPages = Math.ceil(totalItems / pageSize);
 
+    // Fetch dynamic display categories once (bilingual payload).
+    const fetchCategories = React.useCallback(async () => {
+        setCatsLoading(true);
+        setCatsError(null);
+        try {
+            const resp = await toolApi.getDisplayCategories();
+            const cats = resp.data && resp.data.display_categories ? resp.data.display_categories : [];
+            setDisplayCategories(cats);
+        } catch (err) {
+            console.error('Failed to load display categories', err);
+            setCatsError('Failed to load categories');
+            // fallback to existing CATEGORIES list if available
+            try { setDisplayCategories(CATEGORIES); } catch (e) { setDisplayCategories([]); }
+        } finally {
+            setCatsLoading(false);
+        }
+    }, []);
+
+    // Run category fetch once on mount
+    useEffect(() => {
+        fetchCategories();
+    }, []);
+
     // Fetch first page or when filters/search change: reset list and offset
     useEffect(() => {
-        // Fetch dynamic display categories for the filter bar (only once on mount)
-        const fetchCategories = async () => {
-            setCatsLoading(true);
-            setCatsError(null);
-            try {
-                const resp = await toolApi.getDisplayCategories();
-                const cats = resp.data && resp.data.display_categories ? resp.data.display_categories : [];
-                setDisplayCategories(cats);
-            } catch (err) {
-                console.error('Failed to load display categories', err);
-                setCatsError('Failed to load categories');
-                // fallback to existing CATEGORIES list if available
-                try { setDisplayCategories(CATEGORIES); } catch (e) { setDisplayCategories([]); }
-            } finally {
-                setCatsLoading(false);
-            }
-        };
-        fetchCategories();
+        // Build a params signature so we can detect when cached data applies
+        const paramsSignature = JSON.stringify({ activeCategory, searchTerm, pricingModel, rating, locale });
 
-        const resetAndLoad = async () => {
-            setLoading(true);
-            setError(null);
-            offsetRef.current = 0;
-            hasMoreRef.current = true;
-            // Clear currently displayed items immediately to avoid showing stale results
-            setTools([]);
-            try {
-                const params = {
-                    offset: offsetRef.current,
-                    limit: pageSize,
-                };
-                if (activeCategory !== 'all') {
-                    // 将首字母大写传给 API (假设这是后端期望的格式)
-                    params.category = activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1);
-                }
-                if (pricingModel) {
-                    params.pricing_model = pricingModel;
-                }
-                if (rating) {
-                    params.rating = rating;
-                }
-                if (searchTerm) params.search = searchTerm;
+        // no client-side cache restore; fetch initial data
+        {
+            const resetAndLoad = async () => {
+                setLoading(true);
+                setError(null);
+                offsetRef.current = 0;
+                hasMoreRef.current = true;
+                // Clear currently displayed items immediately to avoid showing stale results
+                setTools([]);
+                try {
+                    const params = {
+                        offset: 0,
+                        limit: pageSize,
+                        lang_code: locale, // 传递当前语言代码
+                    };
+                    if (activeCategory !== 'all') {
+                        // Send the display label that matches the requested lang_code.
+                        const catObj = displayCategories.find(c => canonicalKey(c) === activeCategory);
+                        if (catObj) {
+                            params.category = (locale === 'zh' ? catObj.zh : catObj.en) || catObj.en || catObj.zh;
+                        } else {
+                            // fallback: send the canonical key itself
+                            params.category = activeCategory;
+                        }
+                    }
+                    if (pricingModel) {
+                        params.pricing_model = pricingModel;
+                    }
+                    if (rating) {
+                        params.rating = rating;
+                    }
+                    if (searchTerm) params.search = searchTerm;
 
-                const response = await toolApi.getToolsCompact(params);
-                const items = response.data.items || [];
-                setTools(items);
-                setTotalItems(response.data.total || 0);
-                offsetRef.current = items.length;
-                if (items.length < pageSize || offsetRef.current >= (response.data.total || 0)) {
-                    hasMoreRef.current = false;
-                }
-                initialLoadDoneRef.current = true; // <--- 关键：标记初始数据已加载
-            } catch (err) {
-                console.error('获取工具列表失败:', err);
-                setError(t('home.loadError') || 'Failed to load data');
-            } finally {
-                setLoading(false);
-            }
-        };
+                    console.log('Loading tools with params:', params)
+                    const response = await toolApi.getToolsCompact(params);
+                    const items = response.data.items || [];
+                    setTools(items);
+                    setTotalItems(response.data.total || 0);
+                    offsetRef.current = items.length;
+                    if (items.length < pageSize || offsetRef.current >= (response.data.total || 0)) {
+                        hasMoreRef.current = false;
+                    }
 
-        resetAndLoad();
-    }, [activeCategory, searchTerm, pricingModel, rating]);
+                    initialLoadDoneRef.current = true; // <--- 关键：标记初始数据已加载
+                } catch (err) {
+                    console.error('获取工具列表失败:', err);
+                    setError(t('home.loadError') || 'Failed to load data');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            resetAndLoad();
+        }
+    }, [activeCategory, searchTerm, pricingModel, rating, locale,]);
 
     const handleSearchChange = (e) => {
         setInputValue(e.target.value);
@@ -164,12 +186,46 @@ const Home = ({ onNavigateToDetail }) => {
         }
     }, [inputValue]);
 
+    // Helpers to normalize and map categories between languages
+    const canonicalKey = useCallback((cat) => {
+        if (!cat) return '';
+        const primary = (cat.en && cat.en.trim()) || (cat.zh && cat.zh.trim()) || '';
+        return primary.split(/\s+/).join(' ').toLowerCase();
+    }, []);
+
+    const findCategoryByLabel = useCallback((label) => {
+        if (!label) return null;
+        const normalized = label.trim().split(/\s+/).join(' ').toLowerCase();
+        for (const cat of displayCategories) {
+            const en = (cat.en || '').trim().split(/\s+/).join(' ').toLowerCase();
+            const zh = (cat.zh || '').trim().split(/\s+/).join(' ').toLowerCase();
+            if (en === normalized || zh === normalized) return cat;
+        }
+        return null;
+    }, [displayCategories]);
+
     // 修正点：点击筛选按钮时，同时清空搜索输入框 (inputValue)
-    const handleFilterClick = useCallback((category) => {
-        setActiveCategory(category.toLowerCase()); // 确保存储为小写，与'all'一致
+    const handleFilterClick = useCallback((categoryLabel) => {
+        // categoryLabel is the localized label shown on the button
+        if (!categoryLabel) return;
+        // Treat the 'all' button specially
+        if (categoryLabel === (t('categories.all') || 'All') || categoryLabel.toLowerCase() === 'all') {
+            setActiveCategory('all');
+            setSearchTerm('');
+            setInputValue('');
+            return;
+        }
+
+        const found = findCategoryByLabel(categoryLabel);
+        if (found) {
+            setActiveCategory(canonicalKey(found));
+        } else {
+            // Fallback: normalize the clicked label itself
+            setActiveCategory(categoryLabel.trim().split(/\s+/).join(' ').toLowerCase());
+        }
         setSearchTerm('');
         setInputValue(''); // 新增：清空输入框显示内容
-    }, []);
+    }, [findCategoryByLabel, canonicalKey, t]);
 
     // 新增：处理 Pricing Model 变更，并清空搜索
     const handlePricingChange = (e) => {
@@ -204,9 +260,15 @@ const Home = ({ onNavigateToDetail }) => {
             const params = {
                 offset: offsetRef.current,
                 limit: pageSize,
+                lang_code: locale, // 传递当前语言代码
             };
             if (activeCategory !== 'all') {
-                params.category = activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1);
+                const catObj = displayCategories.find(c => canonicalKey(c) === activeCategory);
+                if (catObj) {
+                    params.category = (locale === 'zh' ? catObj.zh : catObj.en) || catObj.en || catObj.zh;
+                } else {
+                    params.category = activeCategory;
+                }
             }
             if (pricingModel) {
                 params.pricing_model = pricingModel;
@@ -218,7 +280,10 @@ const Home = ({ onNavigateToDetail }) => {
 
             const response = await toolApi.getToolsCompact(params);
             const items = response.data.items || [];
-            setTools(prev => [...prev, ...items]);
+            setTools(prev => {
+                const merged = [...prev, ...items];
+                return merged;
+            });
             setTotalItems(response.data.total || 0);
             offsetRef.current += items.length;
             if (items.length < pageSize || offsetRef.current >= (response.data.total || 0)) {
@@ -230,7 +295,7 @@ const Home = ({ onNavigateToDetail }) => {
         } finally {
             setLoadingMore(false);
         }
-    }, [activeCategory, searchTerm, pricingModel, loading, loadingMore, rating]);
+    }, [activeCategory, searchTerm, pricingModel, loading, loadingMore, rating, locale]);
 
     // 不再需要本地过滤，因为后端API已经处理了筛选和搜索
     const displayTools = tools;
@@ -284,7 +349,9 @@ const Home = ({ onNavigateToDetail }) => {
         return () => {
             observer.disconnect();
         };
-    }, [loadMore,loading, loadingMore,initialLoadDoneRef.current]);
+    }, [loadMore, loading, loadingMore, initialLoadDoneRef.current]);
+
+    // caching removed: no-op for unmount
     return (
         <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 md:py-12">
 
@@ -325,7 +392,7 @@ const Home = ({ onNavigateToDetail }) => {
                 <FilterButton
                     category={t('categories.all')}
                     isActive={activeCategory === 'all'}
-                    onClick={() => handleFilterClick('all')}
+                    onClick={() => handleFilterClick(t('categories.all') || 'all')}
                 />
 
                 {/* Dynamic Category Buttons */}
@@ -334,14 +401,18 @@ const Home = ({ onNavigateToDetail }) => {
                         <div className="animate-pulse h-9 w-24 bg-gray-100 rounded-full" />
                     </div>
                 ) : (
-                    displayCategories.map(category => (
-                        <FilterButton
-                            key={category}
-                            category={category}
-                            isActive={activeCategory === (category || '').toLowerCase()}
-                            onClick={() => handleFilterClick(category)}
-                        />
-                    ))
+                    displayCategories.map(cat => {
+                            const label = (locale === 'zh' ? cat.zh : cat.en) || cat.en || cat.zh || '';
+                            const key = canonicalKey(cat);
+                            return (
+                                <FilterButton
+                                    key={key || label}
+                                    category={label}
+                                    isActive={activeCategory === key}
+                                    onClick={() => handleFilterClick(label)}
+                                />
+                            );
+                        })
                 )}
 
                 {/* Pricing Model Dropdown + Rating Filter */}

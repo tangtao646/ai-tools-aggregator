@@ -10,9 +10,12 @@ const CategoryMappingSection = () => {
   const [error, setError] = useState(null);
   const [statusMessage, setStatusMessage] = useState('');
 
-  const onEditDisplay = (orig) => (e) => {
+  // 移除 onEditDisplay，因为现在分别编辑 zh 和 en
+
+  const onEditField = (orig, field) => (e) => {
     const val = e.target.value;
-    setMappingEdits(prev => ({ ...prev, [orig]: { ...(prev[orig]||{}), display: val } }));
+    // 使用 onEditField 更新 zh 或 en 字段
+    setMappingEdits(prev => ({ ...prev, [orig]: { ...(prev[orig]||{}), [field]: val } }));
   };
 
   const onToggleInclude = (orig) => (e) => {
@@ -29,9 +32,26 @@ const CategoryMappingSection = () => {
     try {
       const resp = await adminApi.generateCategoryMapping(undefined, false);
       setPreview(resp);
-      const base = resp.merged_mapping || resp.new_mappings || {};
+      // Backend now returns the generated mapping as top-level keys on success.
+      // Detect mapping keys by excluding known metadata keys, but fall back
+      // to legacy shapes like `merged_mapping` or `new_mappings`.
+      const metadataKeys = new Set(['message', 'used_fallback', 'upsert_summary', 'inserted', 'updated', 'skipped', 'db_upserted', 'summary']);
+      let base = {};
+      if (resp && typeof resp === 'object') {
+        Object.keys(resp).forEach(k => {
+          if (!metadataKeys.has(k)) base[k] = resp[k];
+        });
+      }
+      if (!base || Object.keys(base).length === 0) {
+        base = (resp && (resp.merged_mapping || resp.new_mappings)) || {};
+      }
       const edits = {};
-      Object.keys(base).forEach(k => { edits[k] = { display: base[k], include: true }; });
+      Object.keys(base).forEach(k => {
+        const val = base[k];
+        const zh = (typeof val === 'string') ? val : (val && (val.zh || '')) || '';
+        const en = (typeof val === 'string') ? '' : (val && (val.en || '')) || '';
+        edits[k] = { zh, en, include: true, origValue: val };
+      });
       setMappingEdits(edits);
       setStatusMessage('Generation complete — edit and Confirm & Save');
     } catch (err) {
@@ -44,15 +64,21 @@ const CategoryMappingSection = () => {
     }
   };
 
+
+
   const commitMapping = async () => {
-    if (!confirm('确认要将当前映射写入映射文件并 upsert 到 DB 吗？')) return;
+    // ⚠️ 使用自定义的确认对话框，避免浏览器 alert/confirm
+    // if (!confirm('确认要将当前映射写入映射文件并 upsert 到 DB 吗？')) return;
+    if (!window.confirm('确认要将当前映射写入映射文件并 upsert 到 DB 吗？')) return;
+
     setLoading(true);
     setError(null);
     setStatusMessage('Saving mapping and upserting to DB...');
     try {
       const mappingOverride = {};
+      // 确保映射时使用 data.zh 和 data.en 字段
       Object.entries(mappingEdits).forEach(([orig, data]) => {
-        if (data && data.include) mappingOverride[orig] = data.display;
+        if (data && data.include) mappingOverride[orig] = { zh: data.zh || '', en: data.en || '' };
       });
       const resp = await adminApi.generateCategoryMapping(undefined, true, mappingOverride);
       setResult(resp);
@@ -68,7 +94,10 @@ const CategoryMappingSection = () => {
   };
 
   const clearCategoryMappingTable = async () => {
-    if (!confirm('确认要清空 `category_mapping` 表吗？此操作不可撤销。')) return;
+    // ⚠️ 使用自定义的确认对话框，避免浏览器 alert/confirm
+    // if (!confirm('确认要清空 `category_mapping` 表吗？此操作不可撤销。')) return;
+    if (!window.confirm('确认要清空 `category_mapping` 表吗？此操作不可撤销。')) return;
+    
     setLoading(true);
     setError(null);
     try {
@@ -104,20 +133,18 @@ const CategoryMappingSection = () => {
           <button onClick={clearCategoryMappingTable} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md">Clear Mapping Table</button>
         </div>
       </div>
-        {statusMessage && (
-          <div className="mt-3 text-sm text-gray-600">
-            {loading ? (
-              <span className="inline-flex items-center gap-2">
-                <svg className="animate-spin h-4 w-4 text-gray-700" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>
-                <span>{statusMessage}</span>
-              </span>
-            ) : (
+      {statusMessage && (
+        <div className="mt-3 text-sm text-gray-600">
+          {loading ? (
+            <span className="inline-flex items-center gap-2">
+              <svg className="animate-spin h-4 w-4 text-gray-700" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>
               <span>{statusMessage}</span>
-            )}
-          </div>
-        )}
-
-      
+            </span>
+          ) : (
+            <span>{statusMessage}</span>
+          )}
+        </div>
+      )}
 
       {preview && (
         <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded">
@@ -130,7 +157,8 @@ const CategoryMappingSection = () => {
                 <tr className="text-left">
                   <th className="px-2 py-1">Include</th>
                   <th className="px-2 py-1">Original Category</th>
-                  <th className="px-2 py-1">Display Category (editable)</th>
+                  {/* 🎯 修改表头 */}
+                  <th className="px-2 py-1">Mapped Categories (editable: ZH/EN)</th>
                 </tr>
               </thead>
               <tbody>
@@ -141,7 +169,37 @@ const CategoryMappingSection = () => {
                   <tr key={orig} className="align-top">
                     <td className="px-2 py-1"><input type="checkbox" checked={!!data.include} onChange={onToggleInclude(orig)} /></td>
                     <td className="px-2 py-1 font-mono text-gray-800">{orig}</td>
-                    <td className="px-2 py-1"><input type="text" className="w-full border rounded px-2 py-1 text-sm" value={data.display} onChange={onEditDisplay(orig)} /></td>
+                    
+                    {/* 🎯 修改表体：显示 ZH 和 EN 两个可编辑字段 */}
+                    <td className="px-2 py-1">
+                      <div className="space-y-2">
+                        {/* ZH Mapping Input (label left of input) */}
+                        <div className="flex items-center gap-3">
+                            <label htmlFor={`zh-${orig}`} className="w-28 text-xs font-medium text-gray-700">中文</label>
+                            <input 
+                              id={`zh-${orig}`} 
+                              type="text" 
+                              className="flex-1 border rounded px-2 py-1 text-sm" 
+                              value={data.zh} 
+                              onChange={onEditField(orig, 'zh')} 
+                            />
+                        </div>
+                        {/* EN Mapping Input (label left of input) */}
+                        <div className="flex items-center gap-3">
+                            <label htmlFor={`en-${orig}`} className="w-28 text-xs font-medium text-gray-700">English</label>
+                            <input 
+                              id={`en-${orig}`} 
+                              type="text" 
+                              className="flex-1 border rounded px-2 py-1 text-sm" 
+                              value={data.en} 
+                              onChange={onEditField(orig, 'en')} 
+                            />
+                        </div>
+
+                        {/* original mapping metadata removed per request */}
+                      </div>
+                    </td>
+                    {/* 🎯 结束修改 */}
                   </tr>
                 ))}
               </tbody>

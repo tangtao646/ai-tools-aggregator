@@ -96,6 +96,25 @@ const adminApi = {
   }
   ,
   /**
+   * Upload file and trigger server-side chunked import using import_tools_auto_split.py
+   * @param {File} file - The JSON file to upload
+   * @param {string} langCode - Language code for translations (default: 'zh')
+   */
+  importSeoToolsAutoSplit: async (file, langCode = 'zh') => {
+    const token = localStorage.getItem('admin_token');
+    const form = new FormData();
+    form.append('file', file);
+    form.append('lang_code', langCode);
+    const response = await apiClient.post('/admin/import-seo-auto-split', form, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data;
+  }
+  ,
+  /**
    * Generic import for a named table. Backend should expose `/admin/import/:table` accepting multipart file.
    * @param {string} table
    * @param {File} file
@@ -127,6 +146,32 @@ const adminApi = {
     return response.data;
   }
   ,
+  /**
+   * Trigger server-side resumable translation of an uploaded JSON array.
+   * @param {File} file - JSON file (array of objects)
+   * @param {string} langCode - target language, e.g. 'zh'
+   * @param {string} key - key property for dedupe/resume (default: 'name')
+   * @param {number} delay - minimum seconds between LLM calls
+   */
+  // added optional `signal` for cancellation (AbortController.signal)
+  translateTools: async (file, langCode = 'zh', key = 'name', delay = 15, signal = undefined) => {
+    const token = localStorage.getItem('admin_token');
+    const form = new FormData();
+    form.append('file', file);
+    form.append('lang_code', langCode);
+    form.append('key', key);
+    form.append('delay', String(delay));
+
+    const response = await apiClient.post('/admin/translate-tools', form, {
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        'Content-Type': 'multipart/form-data'
+      },
+      // pass through AbortController signal if provided (axios supports it)
+      signal,
+    });
+    return response.data;
+  },
   /**
    * Check if a username corresponds to an admin account.
    * Public endpoint used to avoid hardcoding admin emails in the frontend.

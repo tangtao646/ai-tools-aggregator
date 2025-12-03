@@ -17,7 +17,7 @@ import { useI18n } from '../i18n/I18nContext';
 const ToolDetail = ({ onBack }) => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
 
   const [tool, setTool] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -78,14 +78,14 @@ const ToolDetail = ({ onBack }) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await toolApi.getToolDetail(id);
+      const response = await toolApi.getToolDetail(id, { lang_code: locale });
       let toolData = response.data;
 
       setTool(toolData);
 
       // 异步加载同类推荐工具
       try {
-        const relatedResp = await toolApi.getRelatedTools(toolData.slug || toolData.id);
+        const relatedResp = await toolApi.getRelatedTools(toolData.slug || toolData.id, { lang_code: locale });
         if (relatedResp && relatedResp.data) {
           const alternatives = Array.isArray(relatedResp.data) ? relatedResp.data : [];
           setTool((prev) => ({ ...(prev || toolData), alternatives }));
@@ -119,7 +119,7 @@ const ToolDetail = ({ onBack }) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await toolApi.getToolDetail(slug);
+      const response = await toolApi.getToolDetail(slug, { lang_code: locale });
       setTool(response.data);
       setLoading(false);
       navigate(`/tool/${slug}`, { replace: true });

@@ -23,7 +23,7 @@ if backend_root not in sys.path:
 
 from app.core.db import engine
 from sqlmodel import Session, select
-from app.models.category_mapping import CategoryMapping
+from backend.app.models.category import CategoryMapping
 
 
 def load_mapping(path: str):
