@@ -176,13 +176,49 @@ const DataManager = () => {
                             const controller = new AbortController();
                             setSectionState(section.key, { _abortController: controller });
 
-                            // start an interval to show activity (will be cleared on completion)
-                            let progress = 0;
+                            // parse file to get total items (JSON array) and keep parsed items to show current name
+                            let totalItems = null;
+                            let parsedItems = null;
+                            try {
+                              const text = await new Promise((resolve, reject) => {
+                                const fr = new FileReader();
+                                fr.onload = () => resolve(fr.result);
+                                fr.onerror = () => reject(new Error('读取文件失败'));
+                                fr.readAsText(f);
+                              });
+                              const parsed = JSON.parse(text);
+                              if (Array.isArray(parsed)) {
+                                totalItems = parsed.length;
+                                parsedItems = parsed;
+                              }
+                            } catch (e) {
+                              // ignore parsing errors; totalItems stays null
+                              totalItems = null;
+                              parsedItems = null;
+                            }
+
+                            // start an interval to simulate per-item progress (will be cleared on completion)
+                            let current = 0;
+                            const keyProp = s.keyProperty || 'name';
                             const interval = setInterval(() => {
-                              progress = Math.min(95, progress + Math.floor(Math.random() * 8) + 3);
-                              setSectionState(section.key, { progress });
-                            }, 1200);
-                            setSectionState(section.key, { _progressInterval: interval });
+                              // increment current index until totalItems (if known) or keep increasing as indicator
+                              if (totalItems) {
+                                current = Math.min(totalItems, current + 1);
+                              } else {
+                                current = current + 1;
+                              }
+
+                              // determine current item's name if available
+                              let currentName = '';
+                              if (parsedItems && parsedItems.length >= current && current > 0) {
+                                const v = parsedItems[current - 1][keyProp];
+                                if (typeof v === 'string') currentName = v;
+                                else if (v !== undefined && v !== null) currentName = String(v);
+                              }
+
+                              setSectionState(section.key, { currentIndex: current, totalItems, currentName, model: 'Gemini / OpenAI' });
+                            }, Math.max(800, (s.delay || 15) * 1000 / 2));
+                            setSectionState(section.key, { _progressInterval: interval, totalItems, currentIndex: 0, currentName: '', model: 'Gemini / OpenAI', parsedItems });
 
                             try {
                               const resp = await adminApi.translateTools(f, s.langCode || 'zh', s.keyProperty || 'name', s.delay || 15, controller.signal);
@@ -194,12 +230,15 @@ const DataManager = () => {
                                 finalProgress = Math.min(100, Math.floor((processed / Math.max(1, total)) * 100));
                               }
                               clearInterval(interval);
-                              setSectionState(section.key, { result: resp, progress: finalProgress, _progressInterval: null, _abortController: null });
+                              // finalize currentIndex to total if we know it
+                              const respTotal = resp && resp.stats && resp.stats.total_items ? resp.stats.total_items : null;
+                              const finalIndex = respTotal || totalItems || current || s.currentIndex || 0;
+                              setSectionState(section.key, { result: resp, currentIndex: finalIndex, totalItems: respTotal || totalItems, model: (resp && resp.used_model) ? resp.used_model : (s.model || 'Gemini / OpenAI'), _progressInterval: null, _abortController: null });
                             } catch (err) {
                               console.error(err);
                               clearInterval(interval);
                               const isAbort = err.name === 'CanceledError' || err.message === 'canceled' || err?.code === 'ERR_CANCELED';
-                              setSectionState(section.key, { error: isAbort ? '已暂停' : (err?.response?.data || String(err)), progress: isAbort ? (s.progress || 0) : 0, _progressInterval: null, _abortController: null });
+                              setSectionState(section.key, { error: isAbort ? '已暂停' : (err?.response?.data || String(err)), _progressInterval: null, _abortController: null });
                             } finally {
                               setSectionState(section.key, { loading: false });
                             }
@@ -210,25 +249,25 @@ const DataManager = () => {
                           {s.loading ? 'Running...' : 'Start Translation'}
                         </button>
 
-                        {/* Pause button: only shown while running */}
-                        {s.loading && (
-                          <button
-                            onClick={() => {
-                              // abort the inflight request and clear progress interval
-                              if (s._abortController) {
-                                try { s._abortController.abort(); } catch (e) { /* ignore */ }
-                              }
-                              if (s._progressInterval) {
-                                clearInterval(s._progressInterval);
-                                setSectionState(section.key, { _progressInterval: null });
-                              }
-                              setSectionState(section.key, { loading: false, error: '已暂停', progress: s.progress || 0, _abortController: null });
-                            }}
-                            className="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md"
-                          >
-                            Pause
-                          </button>
-                        )}
+                          {/* Pause button: only shown while running */}
+                          {s.loading && (
+                            <button
+                              onClick={() => {
+                                // abort the inflight request and clear progress interval
+                                if (s._abortController) {
+                                  try { s._abortController.abort(); } catch (e) { /* ignore */ }
+                                }
+                                if (s._progressInterval) {
+                                  clearInterval(s._progressInterval);
+                                  setSectionState(section.key, { _progressInterval: null });
+                                }
+                                setSectionState(section.key, { loading: false, error: '已暂停', _abortController: null });
+                              }}
+                              className="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md"
+                            >
+                              Pause
+                            </button>
+                          )}
                       </div>
                     </div>
                   </div>
@@ -267,14 +306,14 @@ const DataManager = () => {
             </div>
 
             {/* result / error per section */}
-            {(section.key === 'tool_translation' && (s.loading || s.progress)) && (
+            {(section.key === 'tool_translation' && (s.loading || s.currentIndex || s.totalItems)) && (
               <div className="mt-3">
                 <div className="flex items-center justify-between text-sm mb-1">
-                  <div className="text-gray-600">Translation progress</div>
-                  <div className="text-gray-600">{(s.progress || 0)}%</div>
-                </div>
-                <div className="w-full bg-gray-200 h-2 rounded">
-                  <div className="bg-indigo-600 h-2 rounded" style={{ width: `${s.progress || 0}%` }} />
+                  <div className="text-gray-600">正在翻译</div>
+                  <div className="text-gray-600">
+                    {s.currentIndex ? (`正在翻译第 ${s.currentIndex}/${s.totalItems || '?'} 条数据`) : '准备中...'}
+                    {s.currentName ? ` （${s.currentName}）` : (s.model ? ` （${s.model}）` : '')}
+                  </div>
                 </div>
               </div>
             )}
