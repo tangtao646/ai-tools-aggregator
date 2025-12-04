@@ -103,7 +103,7 @@ type ToolCompact struct {
 	ShortDescription *string  `db:"short_description" json:"short_description"`
 	LogoURL          *string  `db:"logo_url" json:"logo_url"`
 	Category         *string  `db:"category" json:"category"`
-	DisplayCategory  string   `db:"display_category" json:"display_category"`
+	DisplayCategory  *string  `db:"display_category" json:"display_category"`
 	PricingModel     *string  `db:"pricing_model" json:"pricing_model"`
 	Rating           *float64 `db:"rating" json:"rating"`
 }

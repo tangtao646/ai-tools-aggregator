@@ -3,19 +3,21 @@ import LanguageSwitcher from './LanguageSwitcher.jsx';
 import { useI18n } from '../../i18n/I18nContext.jsx';
 import { useNavigate } from 'react-router-dom';
 
-const Header = ({ 
-    isDarkMode, 
-    toggleDarkMode, 
-    isAuthenticated, 
-    navigateToSubmit, 
-    userInfo, 
-    showUserMenu, 
-    setShowUserMenu, 
-    handleLogout, 
-    navigateToLogin 
+const Header = ({
+    isDarkMode,
+    toggleDarkMode,
+    isAuthenticated,
+    navigateToSubmit,
+    userInfo,
+    showUserMenu,
+    setShowUserMenu,
+    handleLogout,
+    navigateToLogin
 }) => {
     const { t } = useI18n();
     const navigate = useNavigate();
+    // Vite env var to temporarily hide the submit button during experiments
+    const hideSubmit = (import.meta.env.VITE_HIDE_SUBMIT || 'false') === 'true';
 
     const navigateHome = () => {
         navigate('/');
@@ -53,13 +55,15 @@ const Header = ({
                         {/* 根据登录状态显示不同按钮 */}
                         {isAuthenticated ? (
                             <>
-                                {/* Submit Button (仅登录用户可见) */}
-                                <button
-                                    className="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-9 px-5 bg-accent text-white text-sm font-bold tracking-wide hover:bg-opacity-90 transition-all shadow-glow-accent hover:shadow-lg hover:shadow-accent/40"
-                                    onClick={navigateToSubmit}
-                                >
-                                    <span className="truncate">{t('header.submitTool')}</span>
-                                </button>
+                                {/* Submit Button (仅登录用户可见) - can be hidden via VITE_HIDE_SUBMIT env var */}
+                                {!hideSubmit && (
+                                    <button
+                                        className="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-9 px-5 bg-accent text-white text-sm font-bold tracking-wide hover:bg-opacity-90 transition-all shadow-glow-accent hover:shadow-lg hover:shadow-accent/40"
+                                        onClick={navigateToSubmit}
+                                    >
+                                        <span className="truncate">{t('header.submitTool')}</span>
+                                    </button>
+                                )}
 
                                 {/* User Avatar with Dropdown */}
                                 <div className="relative">
