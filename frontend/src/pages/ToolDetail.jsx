@@ -11,10 +11,8 @@ import { useI18n } from '../i18n/I18nContext';
 
 /**
  * AI Tool Detail Page - Design Reference Version
- * @param {object} props 
- * @param {function} props.onBack - Callback function to return to list page
  */
-const ToolDetail = ({ onBack }) => {
+const ToolDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { t, locale } = useI18n();
@@ -40,6 +38,16 @@ const ToolDetail = ({ onBack }) => {
     wasManuallyClosed,
     setWasManuallyClosed
   } = useVideoController(tool ? tool.video_url : null);
+
+   const handleGoBack = useCallback(() => {
+    // history.length > 1 の場合、ユーザーは直前のページから遷移してきた可能性が高い
+    if (window.history.length > 1) {
+      window.history.back(); // 上一步 (可能是外部网站，如 aicollection.tools) に戻る
+    } else {
+      // 履歴がない場合や不十分な場合は、サイトのホーム ('/') に安全にリダイレクト
+      navigate('/');
+    }
+  }, [navigate]);
 
   // Intersection Observer for PiP
   useEffect(() => {
@@ -324,7 +332,7 @@ const ToolDetail = ({ onBack }) => {
         <div className="flex flex-col gap-8">
           {/* Back Button */}
           <div>
-            <BackButton onClick={onBack} title={t('common.back') || 'Back'} />
+            <BackButton onClick={handleGoBack} title={t('common.back') || 'Back'} />
           </div>
 
           {/* Main Layout Container (Tool Header + Content + Ad) */}
