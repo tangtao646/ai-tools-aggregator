@@ -27,7 +27,7 @@ func Load() (*Config, error) {
 		DatabaseURL: getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/aitools?sslmode=disable"),
 		JWTSecret:   getEnv("JWT_SECRET", "your-secret-key-change-in-production"),
 		Port:        getEnv("PORT", "8000"),
-		Environment: getEnv("ENVIRONMENT", "development"),
+		Environment: getEnv("RAILWAY_ENVIRONMENT", "development"),
 		DefaultLang: getEnv("DEFAULT_LANG", "zh"),
 	}
 
