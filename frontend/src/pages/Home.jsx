@@ -5,7 +5,7 @@ import ToolCard from '../components/common/ToolCard'; // 恢复原始导入
 import { CATEGORIES } from '../constants/categories'; // 恢复原始导入
 import { useI18n } from '../i18n/I18nContext'; // 恢复原始导入
 // 引入 React Query
-import { useInfiniteQuery } from '@tanstack/react-query'; 
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'; 
 
 
 // --- 辅助组件 ---
@@ -43,11 +43,7 @@ const Home = ({ onNavigateToDetail }) => {
     const [pricingModel, setPricingModel] = useState('');
     const [rating, setRating] = useState('');
     
-    // 分类状态 (保持不变)
-    const [displayCategories, setDisplayCategories] = useState([]); // 动态分类
-    const [catsLoading, setCatsLoading] = useState(true);
-    const [catsError, setCatsError] = useState(null);
-    
+    // 用于无限滚动触发的哨兵引用
     const sentinelRef = useRef(null);
     
     // -----------------------------------------------------------
@@ -59,6 +55,39 @@ const Home = ({ onNavigateToDetail }) => {
         const primary = (cat.en && cat.en.trim()) || (cat.zh && cat.zh.trim()) || '';
         return primary.split(/\s+/).join(' ').toLowerCase();
     }, []);
+    
+    // -----------------------------------------------------------
+    // 2. Fetch Dynamic Categories (使用 useQuery)
+    // -----------------------------------------------------------
+    
+    const { 
+        data: categoriesData, 
+        isLoading: isCategoriesLoading, 
+        // 忽略 isError，因为我们总是有 CATEGORIES 作为后备
+    } = useQuery({
+        // 使用一个稳定的键
+        queryKey: ['displayCategories'],
+        
+        // 实际的 API 调用函数
+        queryFn: async () => {
+            try {
+                const resp = await toolApi.getDisplayCategories();
+                // 成功则返回动态列表
+                return resp.data && resp.data.display_categories ? resp.data.display_categories : CATEGORIES;
+            } catch (err) {
+                console.error('Failed to load display categories, falling back to static list.', err);
+                // 失败则返回静态后备列表
+                return CATEGORIES; 
+            }
+        },
+        // 设置缓存时间：分类很少变化，可以缓存较长时间
+        staleTime: 1000 * 60 , // 24小时
+        // 使用静态列表作为初始数据，以便在加载前快速渲染 (可选优化)
+        placeholderData: CATEGORIES,
+    });
+
+    // 派生出 displayCategories 数组，并提供给 findCategoryByLabel
+    const displayCategories = useMemo(() => categoriesData || [], [categoriesData]);
 
     const findCategoryByLabel = useCallback((label) => {
         if (!label) return null;
@@ -70,31 +99,6 @@ const Home = ({ onNavigateToDetail }) => {
         }
         return null;
     }, [displayCategories]);
-
-
-    // -----------------------------------------------------------
-    // 2. Fetch Dynamic Categories (保持不变)
-    // -----------------------------------------------------------
-
-    const fetchCategories = React.useCallback(async () => {
-        setCatsLoading(true);
-        setCatsError(null);
-        try {
-            const resp = await toolApi.getDisplayCategories();
-            const cats = resp.data && resp.data.display_categories ? resp.data.display_categories : [];
-            setDisplayCategories(cats);
-        } catch (err) {
-            console.error('Failed to load display categories', err);
-            setCatsError('Failed to load categories');
-            try { setDisplayCategories(CATEGORIES); } catch (e) { setDisplayCategories([]); }
-        } finally {
-            setCatsLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchCategories();
-    }, [fetchCategories]);
 
 
     // -----------------------------------------------------------
@@ -136,6 +140,11 @@ const Home = ({ onNavigateToDetail }) => {
         
         // 实际的 API 调用函数
         queryFn: async ({ pageParam = 0 }) => {
+            // 确保分类数据加载完毕或使用了后备数据才开始加载工具
+            // 这里的 isCategoriesLoading 检查是冗余的，因为 buildParams 依赖 categoriesData，
+            // 但 React Query 内部的机制会确保在依赖项变化时重新运行 queryFn。
+            // 保持此处的代码不变，因为它不会引起错误。
+
             const params = buildParams(pageParam);
             //console.log('Loading tools with params:', params)
             const response = await toolApi.getToolsCompact(params);
@@ -162,8 +171,6 @@ const Home = ({ onNavigateToDetail }) => {
         // 1分钟内回退到首页，直接使用缓存，不发请求。超过 1 分钟，静默刷新。
         staleTime: 1000 * 60 * 1, 
         
-        // 在 queryKey 变化时，默认情况下 useInfiniteQuery 会重新开始，不需要 keepPreviousData 
-        // 但为了更好的用户体验 (筛选时保留旧数据直到新数据加载)，可以加上：
         // keepPreviousData: true, 
     });
 
@@ -283,6 +290,7 @@ const Home = ({ onNavigateToDetail }) => {
         const sentinel = sentinelRef.current;
         
         // 只有当有下一页，且当前没有在加载（包括首次和加载更多）时，才准备观察
+        // isFetching 包含 isLoading 和 isFetchingNextPage，所以这里使用 !isFetching 即可
         const canLoadMore = hasNextPage && !isFetching; 
 
         if (!sentinel || !canLoadMore) return;
@@ -358,7 +366,8 @@ const Home = ({ onNavigateToDetail }) => {
                 />
 
                 {/* Dynamic Category Buttons */}
-                {catsLoading ? (
+                {/* 使用 isCategoriesLoading 替换 catsLoading */}
+                {isCategoriesLoading ? (
                     <div className="flex items-center px-2">
                         <div className="animate-pulse h-9 w-24 bg-gray-100 rounded-full" />
                     </div>

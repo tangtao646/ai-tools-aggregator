@@ -5,16 +5,14 @@
  * 注意：这里存储的是分类的 key，用于 i18n 翻译
  * 实际显示的文本会根据当前语言从语言包中获取
  */
-export const CATEGORIES = [
-    'chat',    // i18n: categories.chat
-    'coding',  // i18n: categories.coding
-    'image',   // i18n: categories.image
-    'video',   // i18n: categories.video
-    'audio',   // i18n: categories.audio
-    'text',    // i18n: categories.text
-    'other'    // i18n: categories.other
-];
-
+export const CATEGORIES =
+    [{ "zh": "对话", "en": "chat" },
+    { "zh": "编程", "en": "coding" },
+    { "zh": "图像", "en": "image" },
+    { "zh": "视频", "en": "video" },
+    { "zh": "音频", "en": "audio" },
+    { "zh": "文本", "en": "text" },
+    { "zh": "其他", "en": "other" },];
 
 /**
  * 获取所有分类（包含"全部工具"选项）
