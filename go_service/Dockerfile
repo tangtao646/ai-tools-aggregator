@@ -41,6 +41,8 @@ WORKDIR /
 
 # 复制编译好的二进制文件
 COPY --from=builder /server .
+# 复制静态文件（ads.txt 等）到运行镜像
+COPY --from=builder /app/static /static
 
 # 暴露端口 (您的服务监听 8000)
 EXPOSE 8000

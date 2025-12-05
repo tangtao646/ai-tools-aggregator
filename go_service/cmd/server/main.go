@@ -42,6 +42,8 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
+	// Register lightweight public static routes (ads.txt etc.)
+	handlers.RegisterStaticRoutes(r)
 	// API v1 routes
 	v1 := r.Group("/api/v1")
 	{

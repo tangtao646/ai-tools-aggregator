@@ -68,3 +68,12 @@ func RegisterWorkflowRoutes(r *gin.RouterGroup, db *sqlx.DB) {
 		workflows.POST("/:id/review", handler.ReviewTemplate)
 	}
 }
+
+// RegisterStaticRoutes registers lightweight public static routes such as ads.txt
+// This function intentionally accepts the top-level *gin.Engine so we can register
+// root-level paths (e.g. "/ads.txt").
+func RegisterStaticRoutes(r *gin.Engine) {
+	// Serve Google AdSense ads.txt from the repository static folder.
+	// Edit ./static/ads.txt to update your publisher ID (e.g. "google.com, pub-123..., DIRECT, f08c47fec0942fa0").
+	r.StaticFile("/ads.txt", "./static/ads.txt")
+}
