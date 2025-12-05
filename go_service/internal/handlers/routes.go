@@ -73,7 +73,8 @@ func RegisterWorkflowRoutes(r *gin.RouterGroup, db *sqlx.DB) {
 // This function intentionally accepts the top-level *gin.Engine so we can register
 // root-level paths (e.g. "/ads.txt").
 func RegisterStaticRoutes(r *gin.Engine) {
-	// Serve Google AdSense ads.txt from the repository static folder.
-	// Edit ./static/ads.txt to update your publisher ID (e.g. "google.com, pub-123..., DIRECT, f08c47fec0942fa0").
+	// Serve ads.txt from the repo static folder. Keep this simple: the
+	// deployment/build should ensure the file exists at ./static/ads.txt
+	// (or adapt the Dockerfile to copy it into the image).
 	r.StaticFile("/ads.txt", "./static/ads.txt")
 }
