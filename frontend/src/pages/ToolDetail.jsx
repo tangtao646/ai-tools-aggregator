@@ -662,7 +662,7 @@ const ToolDetail = () => {
           videoId={videoId}
           startTime={currentTime}
           onClose={() => {
-            console.log("MiniPlayer: Manual Close Triggered.");
+            //console.log("MiniPlayer: Manual Close Triggered.");
             stopPiP(true);
           }}
           playerRef={miniPlayerRef}

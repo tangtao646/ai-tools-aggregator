@@ -137,10 +137,12 @@ func getToolsCompact(db *sqlx.DB) gin.HandlerFunc {
 				decodedCategory = un
 			}
 		}
-		println("decodedCategory==:", decodedCategory)
 
 		pricing := c.Query("pricing_model")
-		minRating := c.Query("min_rating")
+		// Accept either `min_rating` (preferred) or the legacy `rating` param from frontend.
+		// This keeps backward compatibility while supporting both consumers.
+		minRating := c.Query("rating")
+
 		langCode := c.DefaultQuery("lang_code", "zh")
 
 		// --- Query Construction ---

@@ -1,10 +1,11 @@
-//frontend/src/pages/Home.jsx
+// frontend/src/pages/Home.jsx
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { toolApi } from '../api/apiClient'; // 恢复原始导入
 import ToolCard from '../components/common/ToolCard'; // 恢复原始导入
 import { CATEGORIES } from '../constants/categories'; // 恢复原始导入
 import { useI18n } from '../i18n/I18nContext'; // 恢复原始导入
-// caching removed per request
+// 引入 React Query
+import { useInfiniteQuery } from '@tanstack/react-query'; 
 
 
 // --- 辅助组件 ---
@@ -33,160 +34,26 @@ const FilterButton = React.memo(({ category, isActive, onClick }) => {
 
 const Home = ({ onNavigateToDetail }) => {
     const { t, locale } = useI18n();
+    const pageSize = 20; // 每页显示20条
 
-    // 状态管理
-    const [tools, setTools] = useState([]); // 从后端获取的工具列表
-    const [loading, setLoading] = useState(true); // 加载状态
-    const [loadingMore, setLoadingMore] = useState(false); // 额外加载状态（滚动触发）
-    const [error, setError] = useState(null); // 错误信息
+    // 筛选和搜索状态 (保持不变)
     const [searchTerm, setSearchTerm] = useState('');
     const [inputValue, setInputValue] = useState(''); // 负责搜索框显示内容
-    // activeCategory stores a canonical key (prefer English label lowercased, fall back to zh)
     const [activeCategory, setActiveCategory] = useState('all'); // 'all' or canonical key
     const [pricingModel, setPricingModel] = useState('');
     const [rating, setRating] = useState('');
+    
+    // 分类状态 (保持不变)
     const [displayCategories, setDisplayCategories] = useState([]); // 动态分类
     const [catsLoading, setCatsLoading] = useState(true);
     const [catsError, setCatsError] = useState(null);
-    const [totalItems, setTotalItems] = useState(0); // 总数据量
-    const pageSize = 20; // 每页显示20条
-    const offsetRef = useRef(0);
-    const hasMoreRef = useRef(true);
+    
     const sentinelRef = useRef(null);
-    const initialLoadDoneRef = useRef(false); // <--- 用于标记第一次数据是否加载完成
+    
+    // -----------------------------------------------------------
+    // 1. Helpers to normalize and map categories
+    // -----------------------------------------------------------
 
-    // 计算总页数（仅用于显示或逻辑判断，如果需要）
-    const totalPages = Math.ceil(totalItems / pageSize);
-
-    // Fetch dynamic display categories once (bilingual payload).
-    const fetchCategories = React.useCallback(async () => {
-        setCatsLoading(true);
-        setCatsError(null);
-        try {
-            const resp = await toolApi.getDisplayCategories();
-            const cats = resp.data && resp.data.display_categories ? resp.data.display_categories : [];
-            setDisplayCategories(cats);
-        } catch (err) {
-            console.error('Failed to load display categories', err);
-            setCatsError('Failed to load categories');
-            // fallback to existing CATEGORIES list if available
-            try { setDisplayCategories(CATEGORIES); } catch (e) { setDisplayCategories([]); }
-        } finally {
-            setCatsLoading(false);
-        }
-    }, []);
-
-    // Run category fetch once on mount
-    useEffect(() => {
-        fetchCategories();
-    }, []);
-
-    // Fetch first page or when filters/search change: reset list and offset
-    useEffect(() => {
-        // Build a params signature so we can detect when cached data applies
-        const paramsSignature = JSON.stringify({ activeCategory, searchTerm, pricingModel, rating, locale });
-
-        // no client-side cache restore; fetch initial data
-        {
-            const resetAndLoad = async () => {
-                setLoading(true);
-                setError(null);
-                offsetRef.current = 0;
-                hasMoreRef.current = true;
-                // Clear currently displayed items immediately to avoid showing stale results
-                setTools([]);
-                try {
-                    const params = {
-                        offset: 0,
-                        limit: pageSize,
-                        lang_code: locale, // 传递当前语言代码
-                    };
-                    if (activeCategory !== 'all') {
-                        // Send the display label that matches the requested lang_code.
-                        const catObj = displayCategories.find(c => canonicalKey(c) === activeCategory);
-                        if (catObj) {
-                            params.category = (locale === 'zh' ? catObj.zh : catObj.en) || catObj.en || catObj.zh;
-                        } else {
-                            // fallback: send the canonical key itself
-                            params.category = activeCategory;
-                        }
-                    }
-                    if (pricingModel) {
-                        params.pricing_model = pricingModel;
-                    }
-                    if (rating) {
-                        params.rating = rating;
-                    }
-                    if (searchTerm) params.search = searchTerm;
-
-                    console.log('Loading tools with params:', params)
-                    const response = await toolApi.getToolsCompact(params);
-                    const items = response.data.items || [];
-                    setTools(items);
-                    setTotalItems(response.data.total || 0);
-                    offsetRef.current = items.length;
-                    if (items.length < pageSize || offsetRef.current >= (response.data.total || 0)) {
-                        hasMoreRef.current = false;
-                    }
-
-                    initialLoadDoneRef.current = true; // <--- 关键：标记初始数据已加载
-                } catch (err) {
-                    console.error('获取工具列表失败:', err);
-                    setError(t('home.loadError') || 'Failed to load data');
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            resetAndLoad();
-        }
-    }, [activeCategory, searchTerm, pricingModel, rating, locale,]);
-
-    const handleSearchChange = (e) => {
-        setInputValue(e.target.value);
-    };
-
-    /**
-     * @function applySearch
-     * @description 应用搜索词，并重置所有筛选器到默认状态。
-     */
-    const applySearch = useCallback(() => {
-        // 1. 设置搜索词，触发 useEffect 重新加载
-        setSearchTerm(inputValue);
-
-        // 2. 重置所有筛选器为默认值 (保留逻辑)
-        if (activeCategory !== 'all') {
-            setActiveCategory('all');
-        }
-        if (pricingModel !== '') {
-            setPricingModel('');
-        }
-        if (rating !== '') {
-            setRating('');
-        }
-    }, [inputValue, activeCategory, pricingModel, rating]);
-
-    const handleClearSearch = useCallback(() => {
-        setSearchTerm('');
-        setInputValue('');
-    }, []);
-
-    // If the user manually clears the input (e.g. backspace to empty),
-    // trigger the default reset/load by clearing the active searchTerm.
-    const _mountedRef = React.useRef(false);
-    React.useEffect(() => {
-        if (!_mountedRef.current) {
-            _mountedRef.current = true;
-            return;
-        }
-
-        if (inputValue === '') {
-            // apply empty search to reset filters/load default list
-            setSearchTerm('');
-        }
-    }, [inputValue]);
-
-    // Helpers to normalize and map categories between languages
     const canonicalKey = useCallback((cat) => {
         if (!cat) return '';
         const primary = (cat.en && cat.en.trim()) || (cat.zh && cat.zh.trim()) || '';
@@ -204,11 +71,169 @@ const Home = ({ onNavigateToDetail }) => {
         return null;
     }, [displayCategories]);
 
-    // 修正点：点击筛选按钮时，同时清空搜索输入框 (inputValue)
+
+    // -----------------------------------------------------------
+    // 2. Fetch Dynamic Categories (保持不变)
+    // -----------------------------------------------------------
+
+    const fetchCategories = React.useCallback(async () => {
+        setCatsLoading(true);
+        setCatsError(null);
+        try {
+            const resp = await toolApi.getDisplayCategories();
+            const cats = resp.data && resp.data.display_categories ? resp.data.display_categories : [];
+            setDisplayCategories(cats);
+        } catch (err) {
+            console.error('Failed to load display categories', err);
+            setCatsError('Failed to load categories');
+            try { setDisplayCategories(CATEGORIES); } catch (e) { setDisplayCategories([]); }
+        } finally {
+            setCatsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchCategories();
+    }, [fetchCategories]);
+
+
+    // -----------------------------------------------------------
+    // 3. React Query Data Fetching (核心变化)
+    // -----------------------------------------------------------
+    
+    // Helper function to build API parameters
+    const buildParams = useCallback((offset) => {
+        const params = {
+            offset: offset,
+            limit: pageSize,
+            lang_code: locale,
+        };
+
+        if (activeCategory !== 'all') {
+            const catObj = displayCategories.find(c => canonicalKey(c) === activeCategory);
+            // 确保发送正确的本地化分类名称给后端
+            params.category = catObj ? (locale === 'zh' ? catObj.zh : catObj.en) || catObj.en || catObj.zh : activeCategory;
+        }
+        if (pricingModel) params.pricing_model = pricingModel;
+        if (rating) params.rating = rating;
+        if (searchTerm) params.search = searchTerm;
+        return params;
+    }, [activeCategory, pricingModel, rating, searchTerm, locale, displayCategories, canonicalKey, pageSize]);
+
+    // 使用 useInfiniteQuery 处理分页、缓存和加载状态
+    const {
+        data,
+        error: toolsError,
+        fetchNextPage,
+        hasNextPage,
+        isFetching,
+        isFetchingNextPage, // 替代 loadingMore
+        isLoading, // 替代 loading (首次加载)
+        isError,
+    } = useInfiniteQuery({
+        // Query Key 必须包含所有筛选器/搜索词，以便在它们变化时触发重新获取
+        queryKey: ['tools', { activeCategory, searchTerm, pricingModel, rating, locale }],
+        
+        // 实际的 API 调用函数
+        queryFn: async ({ pageParam = 0 }) => {
+            const params = buildParams(pageParam);
+            //console.log('Loading tools with params:', params)
+            const response = await toolApi.getToolsCompact(params);
+            
+            // 返回数据结构，包含下一页的 offset
+            return {
+                items: response.data.items || [],
+                nextOffset: pageParam + (response.data.items || []).length, 
+                total: response.data.total || 0,
+            };
+        },
+        
+        // 如何获取下一页的参数
+        getNextPageParam: (lastPage, allPages) => {
+            // 如果获取的条目少于 pageSize，则说明没有更多数据了
+            if (lastPage.items.length < pageSize) { 
+                return undefined;
+            }
+            // 返回下一页的 offset
+            return lastPage.nextOffset;
+        },
+        
+        // 关键：设置 staleTime，控制组件重新挂载时的刷新行为
+        // 1分钟内回退到首页，直接使用缓存，不发请求。超过 1 分钟，静默刷新。
+        staleTime: 1000 * 60 * 1, 
+        
+        // 在 queryKey 变化时，默认情况下 useInfiniteQuery 会重新开始，不需要 keepPreviousData 
+        // 但为了更好的用户体验 (筛选时保留旧数据直到新数据加载)，可以加上：
+        // keepPreviousData: true, 
+    });
+
+
+    // 扁平化数据：将分页的数据结构展平为单个数组
+    const tools = useMemo(() => {
+        return data?.pages?.flatMap(page => page.items) || [];
+    }, [data]);
+    
+    // 去重：在渲染前移除重复项
+    const uniqueDisplayTools = useMemo(() => {
+        const seen = new Set();
+        const result = [];
+        for (const t of tools) { 
+            const key = (t && (t.slug || t.id || JSON.stringify(t)));
+            if (!key) {
+                result.push(t);
+                continue;
+            }
+            if (seen.has(key)) continue;
+            seen.add(key);
+            result.push(t);
+        }
+        return result;
+    }, [tools]);
+
+
+    // -----------------------------------------------------------
+    // 4. Search and Filter Handlers (保持不变，但它们的副作用是改变 Query Key)
+    // -----------------------------------------------------------
+
+    const handleSearchChange = (e) => {
+        setInputValue(e.target.value);
+    };
+
+    /**
+     * @function applySearch
+     * @description 应用搜索词，并重置所有筛选器到默认状态。
+     */
+    const applySearch = useCallback(() => {
+        // 更改 searchTerm，触发 useInfiniteQuery 重新获取
+        setSearchTerm(inputValue);
+        
+        // 重置所有筛选器为默认值
+        if (activeCategory !== 'all') { setActiveCategory('all'); }
+        if (pricingModel !== '') { setPricingModel(''); }
+        if (rating !== '') { setRating(''); }
+    }, [inputValue, activeCategory, pricingModel, rating]);
+
+    const handleClearSearch = useCallback(() => {
+        setSearchTerm('');
+        setInputValue('');
+    }, []);
+
+    const _mountedRef = React.useRef(false);
+    React.useEffect(() => {
+        if (!_mountedRef.current) {
+            _mountedRef.current = true;
+            return;
+        }
+
+        if (inputValue === '') {
+            setSearchTerm('');
+        }
+    }, [inputValue]);
+
+    // 修正点：点击筛选按钮时，清空搜索输入框
     const handleFilterClick = useCallback((categoryLabel) => {
-        // categoryLabel is the localized label shown on the button
         if (!categoryLabel) return;
-        // Treat the 'all' button specially
+        
         if (categoryLabel === (t('categories.all') || 'All') || categoryLabel.toLowerCase() === 'all') {
             setActiveCategory('all');
             setSearchTerm('');
@@ -220,29 +245,29 @@ const Home = ({ onNavigateToDetail }) => {
         if (found) {
             setActiveCategory(canonicalKey(found));
         } else {
-            // Fallback: normalize the clicked label itself
             setActiveCategory(categoryLabel.trim().split(/\s+/).join(' ').toLowerCase());
         }
+        // 更改 activeCategory，触发 useInfiniteQuery 重新获取
         setSearchTerm('');
-        setInputValue(''); // 新增：清空输入框显示内容
+        setInputValue('');
     }, [findCategoryByLabel, canonicalKey, t]);
 
-    // 新增：处理 Pricing Model 变更，并清空搜索
+    // 处理 Pricing Model 变更，并清空搜索
     const handlePricingChange = (e) => {
         const value = e.target.value;
         setPricingModel(value);
-        // 筛选变更时，清空搜索
+        // 更改 pricingModel，触发 useInfiniteQuery 重新获取
         if (searchTerm || inputValue) {
             setSearchTerm('');
             setInputValue('');
         }
     };
 
-    // 新增：处理 Rating 变更，并清空搜索
+    // 处理 Rating 变更，并清空搜索
     const handleRatingChange = (e) => {
         const value = e.target.value;
         setRating(value);
-        // 筛选变更时，清空搜索
+        // 更改 rating，触发 useInfiniteQuery 重新获取
         if (searchTerm || inputValue) {
             setSearchTerm('');
             setInputValue('');
@@ -250,92 +275,23 @@ const Home = ({ onNavigateToDetail }) => {
     };
 
 
-    // Load more items (called by intersection observer)
-    const loadMore = useCallback(async () => {
-        if (loadingMore || loading) return;
-        if (!hasMoreRef.current) return;
-        setLoadingMore(true);
-        setError(null);
-        try {
-            const params = {
-                offset: offsetRef.current,
-                limit: pageSize,
-                lang_code: locale, // 传递当前语言代码
-            };
-            if (activeCategory !== 'all') {
-                const catObj = displayCategories.find(c => canonicalKey(c) === activeCategory);
-                if (catObj) {
-                    params.category = (locale === 'zh' ? catObj.zh : catObj.en) || catObj.en || catObj.zh;
-                } else {
-                    params.category = activeCategory;
-                }
-            }
-            if (pricingModel) {
-                params.pricing_model = pricingModel;
-            }
-            if (rating) {
-                params.rating = rating;
-            }
-            if (searchTerm) params.search = searchTerm;
+    // -----------------------------------------------------------
+    // 5. IntersectionObserver (使用 React Query 状态)
+    // -----------------------------------------------------------
 
-            const response = await toolApi.getToolsCompact(params);
-            const items = response.data.items || [];
-            setTools(prev => {
-                const merged = [...prev, ...items];
-                return merged;
-            });
-            setTotalItems(response.data.total || 0);
-            offsetRef.current += items.length;
-            if (items.length < pageSize || offsetRef.current >= (response.data.total || 0)) {
-                hasMoreRef.current = false;
-            }
-        } catch (err) {
-            console.error('加载更多工具失败:', err);
-            setError(t('home.loadError') || 'Failed to load more data');
-        } finally {
-            setLoadingMore(false);
-        }
-    }, [activeCategory, searchTerm, pricingModel, loading, loadingMore, rating, locale]);
-
-    // 不再需要本地过滤，因为后端API已经处理了筛选和搜索
-    const displayTools = tools;
-
-    // 去重：在渲染前移除重复项（优先使用 id 或 slug 判重）
-    const uniqueDisplayTools = React.useMemo(() => {
-        const seen = new Set();
-        const result = [];
-        for (const t of displayTools) {
-            const key = (t && (t.slug || t.id || JSON.stringify(t)));
-            if (!key) {
-                // fallback: push if cannot derive key
-                result.push(t);
-                continue;
-            }
-            if (seen.has(key)) continue;
-            seen.add(key);
-            result.push(t);
-        }
-        return result;
-    }, [displayTools]);
-
-    // IntersectionObserver 用于实现滚动到底部自动加载更多
     useEffect(() => {
         const sentinel = sentinelRef.current;
-        // 🚨 检查 1：如果初始数据未加载，不启动 Observer
-        if (!initialLoadDoneRef.current) return;
+        
+        // 只有当有下一页，且当前没有在加载（包括首次和加载更多）时，才准备观察
+        const canLoadMore = hasNextPage && !isFetching; 
 
-        if (!sentinel) return;
-
-        // 检查是否有更多数据，如果没有，则不初始化 Observer
-        if (!hasMoreRef.current) {
-            return;
-        }
+        if (!sentinel || !canLoadMore) return;
 
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
-                // 确保在可见、有更多数据、且当前未加载时才调用
-                if (entry.isIntersecting && hasMoreRef.current && !loading && !loadingMore) { 
-                    loadMore();
+                // 如果可见且可以加载更多
+                if (entry.isIntersecting && canLoadMore) { 
+                    fetchNextPage(); // 调用 React Query 的加载更多函数
                 }
             });
         }, {
@@ -349,13 +305,19 @@ const Home = ({ onNavigateToDetail }) => {
         return () => {
             observer.disconnect();
         };
-    }, [loadMore, loading, loadingMore, initialLoadDoneRef.current]);
+    }, [fetchNextPage, hasNextPage, isFetching]); // 依赖项调整为 useInfiniteQuery 提供的状态和函数
 
-    // caching removed: no-op for unmount
+
+    // -----------------------------------------------------------
+    // 6. Render
+    // -----------------------------------------------------------
+
+    const displayError = isError ? toolsError?.message || t('home.loadError') : null;
+
     return (
         <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 md:py-12">
 
-            {/* 1. Search Bar - 保持原布局，但移除 Shadow-sm 以匹配设计图的轻量感 */}
+            {/* 1. Search Bar */}
             <div className="mb-8 flex justify-center">
                 <label className="flex flex-col min-w-40 h-14 w-full max-w-[50%]">
                     <div className="flex w-full flex-1 items-stretch rounded-xl h-full bg-white dark:bg-gray-800 border border-[#E2E8F0] dark:border-gray-700 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/50">
@@ -386,7 +348,7 @@ const Home = ({ onNavigateToDetail }) => {
                 </label>
             </div>
 
-            {/* 2. Filters - 保持与设计图一致的紧凑布局和 Clear Search 位置 */}
+            {/* 2. Filters */}
             <div className="flex flex-wrap items-center gap-3 mb-10">
                 {/* All Tools Button */}
                 <FilterButton
@@ -420,7 +382,7 @@ const Home = ({ onNavigateToDetail }) => {
                     <label className="sr-only">Pricing</label>
                     <select
                         value={pricingModel}
-                        onChange={handlePricingChange} // 修正后的处理函数
+                        onChange={handlePricingChange}
                         className="h-9 px-3 rounded-full border border-[#E2E8F0] dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300"
                     >
                         <option value="">{t('home.allPricing') || 'All'}</option>
@@ -433,7 +395,7 @@ const Home = ({ onNavigateToDetail }) => {
                     {/* Rating dropdown: minimum rating filter (4+ etc.) */}
                     <select
                         value={rating}
-                        onChange={handleRatingChange} // 修正后的处理函数
+                        onChange={handleRatingChange}
                         className="h-9 px-3 rounded-full border border-[#E2E8F0] dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300"
                     >
                         <option value="">{t('home.ratingAll') || 'All ratings'}</option>
@@ -442,34 +404,21 @@ const Home = ({ onNavigateToDetail }) => {
                         <option value="2">{t('home.rating2Plus') || '2+'}</option>
                     </select>
                 </div>
-
-                {/* Clear Search Button (Visible when search term exists, positioned on the right) */}
-                {/* <div className="flex-grow"></div>
-                {searchTerm && (
-                    <button 
-                        onClick={handleClearSearch} 
-                        className="text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary/90 whitespace-nowrap"
-                    >
-                        {t('home.clearSearch')}
-                    </button>
-                )} */}
             </div>
 
             {/* 3. Tool Grid */}
-            {loading ? (
-                // 加载状态
+            {isLoading ? ( // 首次加载状态
                 <div className="text-center py-20">
                     <div className="animate-spin inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full mb-4"></div>
                     <p className="text-xl text-gray-600 dark:text-gray-400">{t('home.loadingTools')}</p>
                 </div>
-            ) : error ? (
-                // 错误状态
+            ) : displayError ? ( // 错误状态
                 <div className="text-center py-10 text-red-600 dark:text-red-400">
                     <p className="text-xl font-semibold mb-2">{t('home.error')}</p>
-                    <p>{error}</p>
+                    <p>{displayError}</p>
                 </div>
-            ) : displayTools.length > 0 ? (
-                // 工具卡片网格 - 响应式：lg及以上5列，md 3列，sm 2列
+            ) : uniqueDisplayTools.length > 0 ? (
+                // 工具卡片网格
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 lg:gap-5">
                     {uniqueDisplayTools.map((tool, idx) => (
                         <ToolCard
@@ -487,11 +436,13 @@ const Home = ({ onNavigateToDetail }) => {
                 </div>
             )}
 
-            {/* Sentinel: 用于触发自动加载更多 */}
-            <div ref={sentinelRef} className="mt-8 h-6"></div>
+            {/* Sentinel: 用于触发自动加载更多，仅在有下一页时显示 */}
+            {hasNextPage && (
+                <div ref={sentinelRef} className="mt-8 h-6"></div>
+            )}
 
             {/* 加载更多指示器 */}
-            {loadingMore && (
+            {isFetchingNextPage && ( // 使用 React Query 的 isFetchingNextPage
                 <div className="text-center py-6">
                     <div className="animate-spin inline-block w-6 h-6 border-4 border-primary border-t-transparent rounded-full mb-2"></div>
                     <p className="text-sm text-gray-600 dark:text-gray-400">{t('home.loadingMore') || 'Loading more...'}</p>
