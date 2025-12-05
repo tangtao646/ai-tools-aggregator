@@ -42,6 +42,7 @@ export default {
     clearSearch: '清除搜索',
     loadingTools: '加载工具中...',
     loadError: '加载工具失败，请稍后重试',
+    loadingMore: '加载更多...',
     error: '加载出错',
     errorLoadingTools: '加载工具失败',
     featured: '精选',
