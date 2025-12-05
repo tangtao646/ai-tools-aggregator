@@ -68,13 +68,3 @@ func RegisterWorkflowRoutes(r *gin.RouterGroup, db *sqlx.DB) {
 		workflows.POST("/:id/review", handler.ReviewTemplate)
 	}
 }
-
-// RegisterStaticRoutes registers lightweight public static routes such as ads.txt
-// This function intentionally accepts the top-level *gin.Engine so we can register
-// root-level paths (e.g. "/ads.txt").
-func RegisterStaticRoutes(r *gin.Engine) {
-	// Serve ads.txt from the repo static folder. Keep this simple: the
-	// deployment/build should ensure the file exists at ./static/ads.txt
-	// (or adapt the Dockerfile to copy it into the image).
-	r.StaticFile("/ads.txt", "./static/ads.txt")
-}
