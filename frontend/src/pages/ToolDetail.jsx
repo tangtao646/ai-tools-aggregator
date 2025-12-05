@@ -395,12 +395,12 @@ const ToolDetail = () => {
                   <div className="flex gap-3 flex-wrap">
                     {tool.supported_platforms && tool.supported_platforms.length > 0 && (
                       <div className="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-gray-200 dark:bg-gray-700 pl-4 pr-4">
-                        <p className="text-gray-800 dark:text-gray-200 text-sm font-medium leading-normal">平台：{tool.supported_platforms.join(', ')}</p>
+                        <p className="text-gray-800 dark:text-gray-200 text-sm font-medium leading-normal">{t('toolDetail.platforms')}: {tool.supported_platforms.join(', ')}</p>
                       </div>
                     )}
                     {tool.updated_at && (
                       <div className="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-gray-200 dark:bg-gray-700 pl-4 pr-4">
-                        <p className="text-gray-800 dark:text-gray-200 text-sm font-medium leading-normal">更新：{new Date(tool.updated_at).toLocaleDateString()}</p>
+                        <p className="text-gray-800 dark:text-gray-200 text-sm font-medium leading-normal">{t('toolDetail.updated')}: {new Date(tool.updated_at).toLocaleDateString()}</p>
                       </div>
                     )}
                   </div>
@@ -412,7 +412,7 @@ const ToolDetail = () => {
                       {/* Rating Display (NEW POSITION and STYLING) */}
                       {tool.rating !== null && tool.rating !== undefined && (
                         <div className="flex items-center gap-4 mb-6">
-                          <h3 className="text-xl font-bold text-[#111827] dark:text-white">评分</h3>
+                          <h3 className="text-xl font-bold text-[#111827] dark:text-white">{t('toolDetail.rating')}</h3>
                           <div className="inline-flex items-center gap-2">
                             {/* Star Icons */}
                             <div className="flex gap-1 flex-shrink-0">
@@ -560,7 +560,7 @@ const ToolDetail = () => {
           {/* Pros & Cons */}
           {((tool.pros && tool.pros.length > 0) || (tool.cons && tool.cons.length > 0)) && (
             <section className="mt-6 pl-6 border-l-4 border-[#14b8a6]">
-              <h3 className="text-2xl font-bold text-[#111827] dark:text-white mb-6">Pros & Cons</h3>
+              <h3 className="text-2xl font-bold text-[#111827] dark:text-white mb-6">{t('toolDetail.prosConsTitle')}</h3>
               <div className="grid md:grid-cols-2 gap-6">
                 {/* Pros Column */}
                 {tool.pros && tool.pros.length > 0 && (
@@ -569,7 +569,7 @@ const ToolDetail = () => {
                       <span className="material-symbols-outlined text-green-600 dark:text-green-400 text-2xl">
                         check_circle
                       </span>
-                      <h4 className="text-xl font-semibold text-green-800 dark:text-green-300">Pros</h4>
+                      <h4 className="text-xl font-semibold text-green-800 dark:text-green-300">{t('toolDetail.pros')}</h4>
                     </div>
                     <ul className="space-y-3">
                       {tool.pros.map((pro, index) => (
@@ -591,7 +591,7 @@ const ToolDetail = () => {
                       <span className="material-symbols-outlined text-red-600 dark:text-red-400 text-2xl">
                         cancel
                       </span>
-                      <h4 className="text-xl font-semibold text-red-800 dark:text-red-300">Cons</h4>
+                      <h4 className="text-xl font-semibold text-red-800 dark:text-red-300">{t('toolDetail.cons')}</h4>
                     </div>
                     <ul className="space-y-3">
                       {tool.cons.map((con, index) => (
@@ -612,7 +612,7 @@ const ToolDetail = () => {
           {/* FAQ Section */}
           {tool.faqs && tool.faqs.length > 0 && (
             <section className="mt-6 pl-6 border-l-4 border-[#14b8a6]">
-              <h3 className="text-2xl font-bold text-[#111827] dark:text-white mb-6">Frequently Asked Questions</h3>
+              <h3 className="text-2xl font-bold text-[#111827] dark:text-white mb-6">{t('toolDetail.faqTitle')}</h3>
               <div className="space-y-4">
                 {tool.faqs.map((faq, index) => (
                   <details key={index} className="group bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">

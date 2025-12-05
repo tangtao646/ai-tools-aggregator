@@ -36,6 +36,7 @@ export default {
     title: '发现最佳 AI 工具',
     subtitle: '探索并找到满足您需求的完美 AI 工具',
     searchPlaceholder: '搜索 AI 工具...',
+    clear: '清除',
     noToolsFound: '未找到工具',
     tryDifferent: '尝试不同的搜索词或筛选条件',
     clearSearch: '清除搜索',
@@ -54,6 +55,13 @@ export default {
 
   toolDetail: {
     coreDescription: '核心描述',
+    platforms: '平台',
+    updated: '更新',
+    rating: '评分',
+    prosConsTitle: '优缺点',
+    pros: '优点',
+    cons: '缺点',
+    faqTitle: '常见问题',
     features: '主要功能',
     useCases: '使用场景',
     pricing: '价格',
