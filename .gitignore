@@ -77,3 +77,7 @@ out/
 *.pem
 *.key
 secrets.json
+set_env
+test_*/
+test-*/
+*.csv

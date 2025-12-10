@@ -74,7 +74,7 @@ const Header = ({
                                     >
                                         <img
                                             src={userInfo?.avatar || 'https://via.placeholder.com/40'}
-                                            alt={userInfo?.name || 'User'}
+                                            alt={userInfo?.username || 'User'}
                                             className="w-full h-full object-cover"
                                         />
                                     </button>
@@ -90,7 +90,7 @@ const Header = ({
                                                 <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-primary">
                                                     <img
                                                         src={userInfo?.avatar || 'https://via.placeholder.com/64'}
-                                                        alt={userInfo?.name || 'User'}
+                                                        alt={userInfo?.username || 'User'}
                                                         className="w-full h-full object-cover"
                                                     />
                                                 </div>
@@ -98,7 +98,7 @@ const Header = ({
                                                 {/* User Name */}
                                                 <div className="text-center">
                                                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                                        {userInfo?.name || 'User'}
+                                                        {userInfo?.username || 'User'}
                                                     </h3>
                                                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                                                         {userInfo?.email || ''}

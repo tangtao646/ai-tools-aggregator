@@ -83,7 +83,7 @@ type GitHubUserInfo struct {
 type User struct {
 	ID        int            `db:"id"`
 	Email     sql.NullString `db:"email"`
-	Name      sql.NullString `db:"name"`
+	Name      sql.NullString `db:"username"`
 	Avatar    sql.NullString `db:"avatar"`
 	GoogleID  sql.NullString `db:"google_id"`
 	GitHubID  sql.NullString `db:"github_id"`
@@ -391,7 +391,7 @@ func (h *AuthHandler) findOrCreateGoogleUser(userInfo *GoogleUserInfo) (*User, e
 		// User exists, update info
 		_, err = h.db.Exec(`
 			UPDATE users 
-			SET name = $1, avatar = $2, google_id = $3, updated_at = NOW()
+			SET username = $1, avatar = $2, google_id = $3, updated_at = NOW()
 			WHERE id = $4
 		`, userInfo.Name, userInfo.Picture, userInfo.ID, user.ID)
 
@@ -407,11 +407,11 @@ func (h *AuthHandler) findOrCreateGoogleUser(userInfo *GoogleUserInfo) (*User, e
 	// Create new user
 	// Use upsert to avoid duplicate key errors in concurrent requests (unique constraint on google_id)
 	err = h.db.Get(&user, `
-		INSERT INTO users (email, name, avatar, google_id, is_active, created_at, updated_at)
+		INSERT INTO users (email, username, avatar, google_id, is_active, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
 		ON CONFLICT (google_id) DO UPDATE
 		SET email = COALESCE(EXCLUDED.email, users.email),
-			name = EXCLUDED.name,
+			username = EXCLUDED.username,
 			avatar = COALESCE(EXCLUDED.avatar, users.avatar),
 			is_active = COALESCE(EXCLUDED.is_active, users.is_active),
 			updated_at = NOW()
@@ -438,7 +438,7 @@ func (h *AuthHandler) findOrCreateGitHubUser(userInfo *GitHubUserInfo) (*User, e
 			name = *userInfo.Name
 		}
 
-		updates := []string{"name = $1", "avatar = $2", "github_id = $3", "updated_at = NOW()"}
+		updates := []string{"username = $1", "avatar = $2", "github_id = $3", "updated_at = NOW()"}
 		args := []interface{}{name, userInfo.AvatarURL, githubID}
 		argNum := 4
 
@@ -474,7 +474,7 @@ func (h *AuthHandler) findOrCreateGitHubUser(userInfo *GitHubUserInfo) (*User, e
 
 			_, err = h.db.Exec(`
 				UPDATE users 
-				SET name = $1, avatar = $2, github_id = $3, updated_at = NOW()
+				SET username = $1, avatar = $2, github_id = $3, updated_at = NOW()
 				WHERE id = $4
 			`, name, userInfo.AvatarURL, githubID, user.ID)
 
@@ -503,11 +503,11 @@ func (h *AuthHandler) findOrCreateGitHubUser(userInfo *GitHubUserInfo) (*User, e
 
 	// Upsert on github_id to avoid duplicate key failures during concurrent signups
 	err = h.db.Get(&user, `
-		INSERT INTO users (email, name, avatar, github_id, is_active, created_at, updated_at)
+		INSERT INTO users (email, username, avatar, github_id, is_active, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
 		ON CONFLICT (github_id) DO UPDATE
 		SET email = COALESCE(EXCLUDED.email, users.email),
-			name = EXCLUDED.name,
+			username = EXCLUDED.username,
 			avatar = COALESCE(EXCLUDED.avatar, users.avatar),
 			is_active = COALESCE(EXCLUDED.is_active, users.is_active),
 			updated_at = NOW()

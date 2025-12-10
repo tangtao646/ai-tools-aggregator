@@ -61,7 +61,7 @@ type ToolFAQ struct {
 type User struct {
 	ID            int       `db:"id" json:"id"`
 	Email         string    `db:"email" json:"email"`
-	Username      *string   `db:"name" json:"name,omitempty"`
+	Username      *string   `db:"username" json:"username,omitempty"`
 	PasswordHash  *string   `db:"password_hash" json:"-"`
 	GoogleID      *string   `db:"google_id" json:"google_id,omitempty"`
 	GithubID      *string   `db:"github_id" json:"github_id,omitempty"`
